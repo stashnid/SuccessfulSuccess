@@ -1,0 +1,48 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  id-token: write # Required for AWS OIDC authentication
+  contents: read  # Required for actions/checkout
+
+env:
+  AWS_REGION: YOUR_AWS_REGION
+  AWS_ACCOUNT_ID: YOUR_AWS_ACCOUNT_ID
+  S3_BUCKET: YOUR_S3_BUCKET
+  CLOUDFRONT_DISTRIBUTION_ID: YOUR_CLOUDFRONT_DISTRIBUTION_ID
+  ECR_REPOSITORY: YOUR_ECR_REPOSITORY
+  IMAGE_TAG: latest
+  ECS_CLUSTER: YOUR_ECS_CLUSTER
+  ECS_SERVICE: YOUR_ECS_SERVICE
+
+jobs:
+  deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::YOUR_AWS_ACCOUNT_ID:role/YOUR_GITHUB_ROLE
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy Backend to AWS ECS Fargate
+        run: make deploy-backend
+
+      - name: Deploy Frontend to AWS S3 & CloudFront
+        run: make deploy-frontend
