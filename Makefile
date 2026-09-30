@@ -6,8 +6,8 @@ AWS_REGION                 ?= YOUR_AWS_REGION
 AWS_ACCOUNT_ID             ?= YOUR_AWS_ACCOUNT_ID
 
 # Frontend variables
-S3_BUCKET                  ?= YOUR_S3_BUCKET
-CLOUDFRONT_DISTRIBUTION_ID ?= YOUR_CLOUDFRONT_DISTRIBUTION_ID
+S3_BUCKET                  ?= spry-frontend-stashnid
+CLOUDFRONT_DISTRIBUTION_ID ?= EE1JHP5CPE2153L
 
 # Backend variables
 ECR_REPOSITORY             ?= YOUR_ECR_REPOSITORY
