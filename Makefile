@@ -2,17 +2,17 @@
 # AWS & Infrastructure Configuration (Placeholder variables)
 # Override via environment variables or command-line flags (e.g. make deploy-backend AWS_REGION=us-east-1)
 # ==============================================================================
-AWS_REGION                 ?= YOUR_AWS_REGION
-AWS_ACCOUNT_ID             ?= YOUR_AWS_ACCOUNT_ID
+AWS_REGION                 ?= us-east-1
+AWS_ACCOUNT_ID             ?= 312209831599
 
 # Frontend variables
 S3_BUCKET                  ?= spry-frontend-stashnid
-CLOUDFRONT_DISTRIBUTION_ID ?= EE1JHP5CPE2153L
+CLOUDFRONT_DISTRIBUTION_ID ?= E1JHP5CPE2153L
 
 # Backend variables
-ECR_REPOSITORY             ?= YOUR_ECR_REPOSITORY
+ECR_REPOSITORY             ?= spry-backend
 IMAGE_TAG                  ?= latest
-ECS_CLUSTER                ?= YOUR_ECS_CLUSTER
+ECS_CLUSTER                ?= spry-cluster
 ECS_SERVICE                ?= YOUR_ECS_SERVICE
 
 ECR_REGISTRY               ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
