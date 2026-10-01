@@ -13,7 +13,7 @@ CLOUDFRONT_DISTRIBUTION_ID ?= E1JHP5CPE2153L
 ECR_REPOSITORY             ?= spry-backend
 IMAGE_TAG                  ?= latest
 ECS_CLUSTER                ?= spry-cluster
-ECS_SERVICE                ?= YOUR_ECS_SERVICE
+ECS_SERVICE                ?= spry-service
 
 ECR_REGISTRY               ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
 IMAGE_URI                  ?= $(ECR_REGISTRY)/$(ECR_REPOSITORY):$(IMAGE_TAG)
