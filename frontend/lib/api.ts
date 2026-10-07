@@ -26,9 +26,6 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  if (!API_BASE_URL) {
-    throw new ApiError(0, "api_unavailable", "Meetings are unavailable until the backend is deployed.", [])
-  }
   const token = await getAccessToken()
   let response: Response
   try {

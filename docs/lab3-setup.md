@@ -17,8 +17,9 @@ Auth stack `successfulsuccess-auth` створений 2026-10-07 у `us-east-1`
 Вхід із паролем ще потрібно перевірити.
 Повторне розгортання статичного сайту: `make deploy-frontend`. Ця команда читає
 публічні Cognito outputs зі стека, збирає frontend, завантажує файли в приватне
-S3-сховище та оновлює CloudFront. Коли backend буде доступний, передай
-`PUBLIC_API_URL=https://...` у цю команду; зараз API онлайн ще немає.
+S3-сховище та оновлює CloudFront. Для зустрічей порожній `PUBLIC_API_URL`
+означає той самий домен: браузер викликає `/api/*`, а CloudFront передає запит
+на наявний ECS-сервер без кешування.
 
 ## Твої дії: Google Cloud
 
@@ -78,10 +79,9 @@ Google secret ніколи не має префікса NEXT_PUBLIC_ і не п�
   опубліковано; `/login/` відкриває реальну сторінку Cognito.
 - Старі ECS targets у Makefile ще потребують узгодження з реальною
   інфраструктурою; вони не розгортають auth stack.
-- Попередній ECS stack має `CREATE_FAILED`. Ціль ALB стала `healthy` після
-  виправлення health check на `/health`, але сайт ще не має HTTPS-маршруту до
-  API, а task definition не передає Cognito pool/client IDs. Тому зустрічі та
-  синхронізація профілю онлайн поки недоступні.
+- Попередній ECS stack має `CREATE_FAILED`, хоча сам ECS service активний.
+  Для stretch goal налаштовано `/api/*` у CloudFront і task definition з
+  Cognito pool/client IDs. API без токена повертає 401.
 - Перевірити refresh, 401 та password sign-up/sign-in; Google sign-in і logout
   вже перевірені окремо.
 - Два скриншоти з email у шапці, URL `/login/`, коміт та доступ викладача до репозиторію.

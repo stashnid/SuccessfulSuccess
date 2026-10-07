@@ -18,7 +18,16 @@ ECS_SERVICE                ?= spry-service
 ECR_REGISTRY               ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
 IMAGE_URI                  ?= $(ECR_REGISTRY)/$(ECR_REPOSITORY):$(IMAGE_TAG)
 
-.PHONY: deploy-frontend deploy-backend
+.PHONY: deploy-frontend deploy-backend connect-api configure-backend-auth
+
+# Lab 3 stretch: publish a same-origin /api/* route and configure the running
+# backend to verify Cognito access tokens. Neither target rebuilds the image.
+connect-api:
+	CLOUDFRONT_DISTRIBUTION_ID=$(CLOUDFRONT_DISTRIBUTION_ID) bash scripts/connect-cloudfront-api.sh
+
+configure-backend-auth:
+	AWS_REGION=$(AWS_REGION) AWS_ACCOUNT_ID=$(AWS_ACCOUNT_ID) \
+	ECS_CLUSTER=$(ECS_CLUSTER) ECS_SERVICE=$(ECS_SERVICE) bash scripts/deploy-ecs-auth.sh
 
 # ==============================================================================
 # 1. Frontend: Build static files, sync to S3 bucket, invalidate CloudFront

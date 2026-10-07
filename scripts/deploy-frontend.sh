@@ -3,6 +3,7 @@ set -euo pipefail
 
 # Publish the static Next.js export to the existing private S3/CloudFront site.
 # Public Cognito IDs come from CloudFormation; no Google secret enters the build.
+# An empty PUBLIC_API_URL makes the browser call same-origin /api/* via CloudFront.
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 region="${AWS_REGION:-us-east-1}"
 account="${AWS_ACCOUNT_ID:-312209831599}"
