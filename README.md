@@ -9,8 +9,10 @@ frontend are deployed in `us-east-1`; the live `/login/` opens Managed Login v2
 with email/password, sign-up and Google. See [the setup guide](docs/lab3-setup.md)
 for the deployed URLs and remaining end-to-end checks. The older `aws-*` recipes
 described below are absent from the current Makefile; do not use them as a
-deployment guide until those recipes are restored. The existing ECS backend
-stack failed to create, so meetings API calls are not yet available online.
+deployment guide until those recipes are restored. The old ECS CloudFormation
+stack is in `CREATE_FAILED`; its ALB target became healthy after fixing the
+health-check path, but the site still has no configured route to the API, so
+meeting requests are not available online.
 
 [![Style](https://github.com/dobosevych/SuccessfulSuccess/actions/workflows/style.yml/badge.svg)](https://github.com/dobosevych/SuccessfulSuccess/actions/workflows/style.yml)
 

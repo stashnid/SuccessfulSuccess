@@ -78,9 +78,10 @@ Google secret ніколи не має префікса NEXT_PUBLIC_ і не п�
   опубліковано; `/login/` відкриває реальну сторінку Cognito.
 - Старі ECS targets у Makefile ще потребують узгодження з реальною
   інфраструктурою; вони не розгортають auth stack.
-- API/backend онлайн ще не працює: попередній ECS stack має CREATE_FAILED.
-  Поточна статична збірка підтримує сторінку входу, але зустрічі та синхронізація
-  профілю потребують справного API.
+- Попередній ECS stack має `CREATE_FAILED`. Ціль ALB стала `healthy` після
+  виправлення health check на `/health`, але сайт ще не має HTTPS-маршруту до
+  API, а task definition не передає Cognito pool/client IDs. Тому зустрічі та
+  синхронізація профілю онлайн поки недоступні.
 - Перевірити refresh, 401 та password sign-up/sign-in; Google sign-in і logout
   вже перевірені окремо.
 - Два скриншоти з email у шапці, URL `/login/`, коміт та доступ викладача до репозиторію.
