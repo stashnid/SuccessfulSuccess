@@ -5,6 +5,10 @@ Description: >-
   app client the Next.js frontend signs in through. The backend accepts the
   access tokens this pool issues to that client.
 
+Metadata:
+  AWSToolsMetrics:
+    AWSAgentToolkit: aws-cloudformation@3
+
 Parameters:
   ProjectName:
     Type: String
@@ -18,6 +22,11 @@ Parameters:
       Every URL the site is served from, each ending in "/": Cognito sends
       people back there after signing in with Google or signing out. Include
       the local dev server and the CloudFront site.
+
+  CallbackUrls:
+    Type: CommaDelimitedList
+    Default: "http://localhost:3000/auth/callback/"
+    Description: Exact OIDC callback URLs, including the trailing slash.
 
   GoogleClientId:
     Type: String
@@ -38,8 +47,15 @@ Conditions:
 Resources:
   UserPool:
     Type: AWS::Cognito::UserPool
+    # Preserve this directory if the auth stack is removed or replaced:
+    # meetings reference existing users by their stable Cognito sub.
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       UserPoolName: !Sub "${ProjectName}-users"
+      UserPoolTier: ESSENTIALS
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
       # People sign in with their email address; Cognito mails them a code to
       # confirm it on sign-up and to reset a forgotten password.
       UsernameAttributes: [email]
@@ -78,6 +94,8 @@ Resources:
       UserPoolId: !Ref UserPool
       # Domain prefixes are unique per region across all accounts.
       Domain: !Sub "${ProjectName}-${AWS::AccountId}"
+      # Managed login requires a branding resource for this public app client.
+      ManagedLoginVersion: 2
 
   GoogleIdentityProvider:
     Type: AWS::Cognito::UserPoolIdentityProvider
@@ -95,9 +113,8 @@ Resources:
         email_verified: email_verified
         name: name
 
-  # Public client for the browser: no secret, SRP for passwords (the password
-  # never leaves the browser), and the authorization-code flow with PKCE for
-  # Google.
+  # Public browser client: no secret; both password and Google sign-in use
+  # managed login and authorization code + PKCE. Keep the logical ID stable.
   UserPoolClient:
     Type: AWS::Cognito::UserPoolClient
     Properties:
@@ -124,8 +141,18 @@ Resources:
       AllowedOAuthFlowsUserPoolClient: true
       AllowedOAuthFlows: [code]
       AllowedOAuthScopes: [openid, email, profile]
-      CallbackURLs: !Ref AppUrls
+      CallbackURLs: !Ref CallbackUrls
       LogoutURLs: !Ref AppUrls
+
+  # Domains created through CloudFormation do not automatically assign branding.
+  # Without it, the version-2 login page is unavailable for this client.
+  ManagedLoginBranding:
+    Type: AWS::Cognito::ManagedLoginBranding
+    DependsOn: UserPoolDomain
+    Properties:
+      UserPoolId: !Ref UserPool
+      ClientId: !Ref UserPoolClient
+      UseCognitoProvidedValues: true
 
 Outputs:
   UserPoolId:
@@ -143,3 +170,7 @@ Outputs:
     Value: !Sub "https://${UserPoolDomain}.auth.${AWS::Region}.amazoncognito.com/oauth2/idpresponse"
   GoogleEnabled:
     Value: !If [HasGoogle, "true", "false"]
+  CallbackUrls:
+    Value: !Join [",", !Ref CallbackUrls]
+  LogoutUrls:
+    Value: !Join [",", !Ref AppUrls]

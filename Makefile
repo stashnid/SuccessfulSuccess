@@ -24,12 +24,9 @@ IMAGE_URI                  ?= $(ECR_REGISTRY)/$(ECR_REPOSITORY):$(IMAGE_TAG)
 # 1. Frontend: Build static files, sync to S3 bucket, invalidate CloudFront
 # ==============================================================================
 deploy-frontend:
-	@echo "==> Building frontend static files..."
-	cd frontend && npm ci && NEXT_OUTPUT=export npm run build
-	@echo "==> Syncing static files to S3: s3://$(S3_BUCKET)..."
-	aws s3 sync frontend/out s3://$(S3_BUCKET) --delete
-	@echo "==> Invalidating CloudFront cache for distribution: $(CLOUDFRONT_DISTRIBUTION_ID)..."
-	aws cloudfront create-invalidation --distribution-id $(CLOUDFRONT_DISTRIBUTION_ID) --paths "/*"
+	AWS_REGION=$(AWS_REGION) AWS_ACCOUNT_ID=$(AWS_ACCOUNT_ID) \
+	S3_BUCKET=$(S3_BUCKET) CLOUDFRONT_DISTRIBUTION_ID=$(CLOUDFRONT_DISTRIBUTION_ID) \
+	PUBLIC_API_URL="$(PUBLIC_API_URL)" bash scripts/deploy-frontend.sh
 
 # ==============================================================================
 # 2. Backend: Build Docker image, push to ECR, force new deployment on ECS Fargate

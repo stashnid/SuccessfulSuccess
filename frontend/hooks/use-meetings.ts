@@ -3,15 +3,18 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { createMeeting, deleteMeeting, listMeetings, updateMeeting } from "@/lib/api"
+import { useAuth } from "@/components/auth-provider"
 import type { MeetingCreateInput } from "@/lib/types"
 
 /** Shared cache key: the list and the header menu read the same entry. */
-export const meetingsKey = (date?: string) => ["meetings", { date: date ?? "today" }] as const
+export const meetingsKey = (date?: string, owner?: string) => ["meetings", owner, { date: date ?? "today" }] as const
 
 export function useMeetings(date?: string) {
+  const { user, status } = useAuth()
   return useQuery({
-    queryKey: meetingsKey(date),
+    queryKey: meetingsKey(date, user?.sub),
     queryFn: () => listMeetings({ date }),
+    enabled: status === "signedIn",
   })
 }
 

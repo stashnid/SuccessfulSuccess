@@ -1,7 +1,7 @@
 import { AuthPage } from "@/components/auth-page";
 
 export const metadata = {
-  title: "Log in — SuccessfulSuccess",
+  title: "SuccessfulSuccess — Meetings",
 };
 
 export default function Home() {

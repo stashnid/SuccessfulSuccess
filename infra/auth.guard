@@ -1,0 +1,21 @@
+# Safety checks for the public Cognito browser client in auth.yml.
+# Run: cfn-guard validate --rules infra/auth.guard --data infra/auth.yml
+
+let web_clients = Resources.*[ Type == 'AWS::Cognito::UserPoolClient' ]
+
+rule web_client_has_no_secret when %web_clients !empty {
+    %web_clients.Properties.GenerateSecret == false
+}
+
+rule web_client_uses_code_flow when %web_clients !empty {
+    %web_clients.Properties.AllowedOAuthFlows[*] == 'code'
+}
+
+rule google_provider_secret_is_masked {
+    Parameters.GoogleClientSecret.NoEcho == true
+}
+
+rule user_directory_is_retained {
+    Resources.UserPool.DeletionPolicy == 'Retain'
+    Resources.UserPool.UpdateReplacePolicy == 'Retain'
+}

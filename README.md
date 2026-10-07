@@ -1,5 +1,17 @@
 # SuccessfulSuccess — Meetings
 
+## Lab 3 sign-in
+
+The frontend now uses Cognito Managed Login with `react-oidc-context` and
+`oidc-client-ts`. Start sign-in at `/login/`; the callback is `/auth/callback/`.
+Both password and Google sign-in are hosted by Cognito. The auth stack and
+frontend are deployed in `us-east-1`; the live `/login/` opens Managed Login v2
+with email/password, sign-up and Google. See [the setup guide](docs/lab3-setup.md)
+for the deployed URLs and remaining end-to-end checks. The older `aws-*` recipes
+described below are absent from the current Makefile; do not use them as a
+deployment guide until those recipes are restored. The existing ECS backend
+stack failed to create, so meetings API calls are not yet available online.
+
 [![Style](https://github.com/dobosevych/SuccessfulSuccess/actions/workflows/style.yml/badge.svg)](https://github.com/dobosevych/SuccessfulSuccess/actions/workflows/style.yml)
 
 A small web app for today's meetings: see what is on today (name, description,

@@ -1,62 +1,66 @@
-import { Amplify } from "aws-amplify"
-import { fetchAuthSession } from "aws-amplify/auth"
-// Completes Google sign-in when Cognito redirects back to the app.
-import "aws-amplify/auth/enable-oauth-listener"
+import { UserManager, WebStorageStateStore } from "oidc-client-ts"
 
 export const authConfig = {
   userPoolId: process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID ?? "",
   clientId: process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID ?? "",
-  // Cognito's OAuth domain, e.g. <prefix>.auth.us-east-1.amazoncognito.com
   domain: process.env.NEXT_PUBLIC_COGNITO_DOMAIN ?? "",
-  googleEnabled: process.env.NEXT_PUBLIC_COGNITO_GOOGLE_ENABLED === "true",
+}
+export const isAuthConfigured = Boolean(authConfig.userPoolId && authConfig.clientId && authConfig.domain)
+let manager: UserManager | null = null
+let renewing: Promise<string | null> | null = null
+
+/** Shared by React and the API client; only created in the browser. */
+export function getUserManager(): UserManager | null {
+  if (typeof window === "undefined" || !isAuthConfigured) return null
+  if (!manager) {
+    const region = authConfig.userPoolId.split("_")[0]
+    manager = new UserManager({
+      authority: `https://cognito-idp.${region}.amazonaws.com/${authConfig.userPoolId}`,
+      client_id: authConfig.clientId,
+      redirect_uri: `${window.location.origin}/auth/callback/`,
+      response_type: "code",
+      scope: "openid email profile",
+      loadUserInfo: false,
+      automaticSilentRenew: true,
+      monitorSession: false,
+      // The library generates PKCE and state. Storage survives Cognito redirects.
+      stateStore: new WebStorageStateStore({ store: window.sessionStorage }),
+      userStore: new WebStorageStateStore({ store: window.sessionStorage }),
+    })
+  }
+  return manager
 }
 
-export const isAuthConfigured = Boolean(authConfig.userPoolId && authConfig.clientId)
-
-let configured = false
-
-/** Idempotent; browser only, because the OAuth redirect URLs use the page's origin. */
-export function configureAuth() {
-  if (configured || !isAuthConfigured || typeof window === "undefined") return
-  const home = `${window.location.origin}/`
-  Amplify.configure({
-    Auth: {
-      Cognito: {
-        userPoolId: authConfig.userPoolId,
-        userPoolClientId: authConfig.clientId,
-        loginWith: {
-          email: true,
-          ...(authConfig.domain
-            ? {
-                oauth: {
-                  domain: authConfig.domain,
-                  scopes: ["openid", "email", "profile"],
-                  redirectSignIn: [home],
-                  redirectSignOut: [home],
-                  responseType: "code" as const,
-                },
-              }
-            : {}),
-        },
-      },
-    },
-  })
-  configured = true
-}
-
-/** The current access token, refreshed by Amplify when it is about to expire. */
 export async function getAccessToken(): Promise<string | null> {
-  if (!isAuthConfigured) return null
-  configureAuth()
-  try {
-    const session = await fetchAuthSession()
-    return session.tokens?.accessToken?.toString() ?? null
-  } catch {
+  const current = getUserManager()
+  if (!current) return null
+  const user = await current.getUser()
+  if (!user) return null
+  if (!user.expired) return user.access_token
+  if (!user.refresh_token) {
+    await current.removeUser()
     return null
   }
+  if (!renewing) {
+    renewing = current.signinSilent()
+      .then((renewed) => renewed?.access_token ?? null)
+      .catch(async () => { await current.removeUser(); return null })
+      .finally(() => { renewing = null })
+  }
+  return renewing
 }
 
-/** Cognito errors carry a readable message; fall back for anything else. */
-export function authErrorMessage(error: unknown): string {
-  return error instanceof Error && error.message ? error.message : "Something went wrong."
+export async function clearSession(): Promise<void> {
+  await getUserManager()?.removeUser()
+}
+
+export async function signOut(): Promise<void> {
+  const current = getUserManager()
+  if (!current) return
+  current.stopSilentRenew()
+  await current.removeUser()
+  const logout = new URL(`https://${authConfig.domain}/logout`)
+  logout.searchParams.set("client_id", authConfig.clientId)
+  logout.searchParams.set("logout_uri", `${window.location.origin}/`)
+  window.location.assign(logout.toString())
 }

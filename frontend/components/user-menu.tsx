@@ -22,7 +22,11 @@ export function UserMenu() {
   const label = user.name ?? user.email ?? "Account"
 
   return (
-    <DropdownMenu>
+    <div className="flex min-w-0 items-center gap-2">
+      <span className="max-w-32 truncate text-xs sm:max-w-60 sm:text-sm" title={user.email}>
+        {user.email ?? label}
+      </span>
+      <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon-lg" className="rounded-full" aria-label="Account menu">
           <Avatar className="size-9">
@@ -45,6 +49,7 @@ export function UserMenu() {
           Sign out
         </DropdownMenuItem>
       </DropdownMenuContent>
-    </DropdownMenu>
+      </DropdownMenu>
+    </div>
   )
 }
