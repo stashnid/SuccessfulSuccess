@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useMeetings } from "@/hooks/use-meetings"
+import { ApiError } from "@/lib/api"
 import type { Meeting } from "@/lib/types"
 
 const GRID = "grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
@@ -88,9 +89,11 @@ export function MeetingList({
         <AlertTitle>Could not load meetings</AlertTitle>
         <AlertDescription className="flex flex-col items-start gap-3">
           <span>{error instanceof Error ? error.message : "Unknown error."}</span>
-          <Button size="sm" variant="outline" onClick={() => refetch()}>
-            Retry
-          </Button>
+          {!(error instanceof ApiError && error.code === "api_unavailable") ? (
+            <Button size="sm" variant="outline" onClick={() => refetch()}>
+              Retry
+            </Button>
+          ) : null}
         </AlertDescription>
       </Alert>
     )

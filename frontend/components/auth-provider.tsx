@@ -6,7 +6,7 @@ import { AuthProvider as OidcProvider, useAuth as useOidcAuth } from "react-oidc
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react"
 
 import { syncMe } from "@/lib/api"
-import { getUserManager, signOut } from "@/lib/auth"
+import { getUserManager, LOGOUT_STORAGE_KEY, signOut } from "@/lib/auth"
 
 export type AuthUser = { sub: string; email?: string; name?: string }
 type AuthContextValue = {
@@ -27,6 +27,7 @@ const unconfigured: AuthContextValue = {
 function SessionProvider({ children }: { children: React.ReactNode }) {
   const auth = useOidcAuth()
   const queryClient = useQueryClient()
+  const [isSigningOut, setIsSigningOut] = useState(false)
   const syncedSub = useRef<string | null>(null)
   const sub = auth.isAuthenticated ? auth.user?.profile.sub : undefined
   const idToken = auth.user?.id_token
@@ -47,13 +48,33 @@ function SessionProvider({ children }: { children: React.ReactNode }) {
     return () => { removeExpired(); removeFailed() }
   }, [events, removeUser])
 
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== LOGOUT_STORAGE_KEY || !event.newValue) return
+      setIsSigningOut(true)
+      queryClient.clear()
+      void removeUser().finally(() => window.location.replace("/"))
+    }
+    window.addEventListener("storage", onStorage)
+    return () => window.removeEventListener("storage", onStorage)
+  }, [queryClient, removeUser])
+
   const value = useMemo<AuthContextValue>(() => ({
-    status: auth.isLoading ? "loading" : sub ? "signedIn" : "signedOut",
+    status: isSigningOut || auth.isLoading ? "loading" : sub ? "signedIn" : "signedOut",
     user: sub ? { sub, email: auth.user?.profile.email, name: auth.user?.profile.name } : null,
     error: auth.error,
     signIn: () => auth.signinRedirect(),
-    signOut: async () => { queryClient.clear(); await signOut() },
-  }), [auth, sub, queryClient])
+    signOut: async () => {
+      setIsSigningOut(true)
+      queryClient.clear()
+      try {
+        await signOut()
+      } catch (error) {
+        setIsSigningOut(false)
+        throw error
+      }
+    },
+  }), [auth, sub, queryClient, isSigningOut])
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 

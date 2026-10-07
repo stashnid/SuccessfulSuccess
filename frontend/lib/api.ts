@@ -26,6 +26,9 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  if (!API_BASE_URL) {
+    throw new ApiError(0, "api_unavailable", "Meetings are unavailable until the backend is deployed.", [])
+  }
   const token = await getAccessToken()
   let response: Response
   try {
@@ -53,7 +56,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   const text = await response.text()
-  const payload = text ? JSON.parse(text) : null
+  let payload: unknown
+  try {
+    payload = text ? JSON.parse(text) : null
+  } catch {
+    throw new ApiError(response.status, "invalid_response", "The meetings API returned an invalid response.", [])
+  }
 
   if (!response.ok) {
     const body = payload as ApiErrorBody | null

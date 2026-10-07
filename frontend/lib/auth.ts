@@ -8,6 +8,7 @@ export const authConfig = {
 export const isAuthConfigured = Boolean(authConfig.userPoolId && authConfig.clientId && authConfig.domain)
 let manager: UserManager | null = null
 let renewing: Promise<string | null> | null = null
+export const LOGOUT_STORAGE_KEY = "successfulsuccess.auth.logout"
 
 /** Shared by React and the API client; only created in the browser. */
 export function getUserManager(): UserManager | null {
@@ -59,8 +60,11 @@ export async function signOut(): Promise<void> {
   if (!current) return
   current.stopSilentRenew()
   await current.removeUser()
+  // Sessions are stored per tab. Notify other tabs so they cannot keep showing
+  // a stale signed-in user after this tab logs out.
+  window.localStorage.setItem(LOGOUT_STORAGE_KEY, String(Date.now()))
   const logout = new URL(`https://${authConfig.domain}/logout`)
   logout.searchParams.set("client_id", authConfig.clientId)
   logout.searchParams.set("logout_uri", `${window.location.origin}/`)
-  window.location.assign(logout.toString())
+  window.location.replace(logout.toString())
 }

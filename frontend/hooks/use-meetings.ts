@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
-import { createMeeting, deleteMeeting, listMeetings, updateMeeting } from "@/lib/api"
+import { ApiError, createMeeting, deleteMeeting, listMeetings, updateMeeting } from "@/lib/api"
 import { useAuth } from "@/components/auth-provider"
 import type { MeetingCreateInput } from "@/lib/types"
 
@@ -15,6 +15,8 @@ export function useMeetings(date?: string) {
     queryKey: meetingsKey(date, user?.sub),
     queryFn: () => listMeetings({ date }),
     enabled: status === "signedIn",
+    retry: (failures, error) =>
+      !(error instanceof ApiError && error.code === "api_unavailable") && failures < 3,
   })
 }
 
