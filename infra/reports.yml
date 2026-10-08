@@ -1,0 +1,463 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Weekly meetings CSV reports: Scheduler and manual requests share SQS, a VPC
+  builder stores files on S3, and an S3-triggered public Lambda emails them.
+
+Metadata:
+  AWSToolsMetrics:
+    AWSAgentToolkit: aws-cloudformation@3
+  com.aws.cloudformation.Context:
+    ref:
+      - at: docs/lab5-reports.md
+        has: deployment prerequisites and event-flow decisions
+        scope: shared
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: successfulsuccess
+    AllowedPattern: "[a-z0-9-]+"
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  LambdaSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnets used by the existing API Lambda and Aurora.
+  LambdaRouteTableIds:
+    Type: List<String>
+    Description: Route tables associated with the Lambda subnets.
+  LambdaSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Existing API Lambda security group allowed into Aurora.
+  BackendImageUri:
+    Type: String
+    Description: Existing backend Lambda image URI pinned by digest.
+  DatabaseEndpoint:
+    Type: String
+    Description: Aurora writer endpoint from the backend stack.
+  DbName:
+    Type: String
+    Default: meetings
+  DbUsername:
+    Type: String
+    Default: app
+  DatabaseSecretArn:
+    Type: String
+    Description: Database credential ARN from the backend stack.
+  MailerCodeBucket:
+    Type: String
+    Description: Existing private artifact bucket containing the mailer zip.
+  MailerCodeKey:
+    Type: String
+    Description: Immutable object key of the mailer zip.
+  ReportFromEmail:
+    Type: String
+    Description: SES-verified sender address (for example reports@example.com).
+  ReportToEmail:
+    Type: String
+    Description: Verified recipient while SES is in its sandbox.
+  SenderDomain:
+    Type: String
+    Default: ""
+    Description: >-
+      Optional owned domain. When supplied, this stack creates its SES identity
+      and outputs three Easy DKIM CNAME records for DNS verification.
+  ScheduleExpression:
+    Type: String
+    Default: "cron(0 7 ? * MON *)"
+    Description: Monday 07:00 Europe/Kyiv; temporarily use rate(5 minutes) for testing.
+  ScheduleTarget:
+    Type: String
+    Default: SQS
+    AllowedValues: [SQS, LAMBDA]
+    Description: Use LAMBDA for the first direct-trigger test, then restore SQS.
+
+Conditions:
+  HasSenderDomain: !Not [!Equals [!Ref SenderDomain, ""]]
+  DirectSchedule: !Equals [!Ref ScheduleTarget, LAMBDA]
+
+Resources:
+  ReportsBucket:
+    Type: AWS::S3::Bucket
+    DependsOn: MailerInvokePermission
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Fixed name lets S3 permission exist before notification; one key per week.
+        must:
+          - Private, encrypted; mailer may only read reports/.
+          - DependsOn mailer permission; do not introduce a bucket ARN cycle.
+          - Do not let the mailer upload into its own trigger prefix.
+    Properties:
+      BucketName: !Sub "${ProjectName}-reports-${AWS::AccountId}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      VersioningConfiguration: { Status: Enabled }
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldReports
+            Status: Enabled
+            Prefix: reports/
+            ExpirationInDays: 90
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 90
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Function: !GetAtt MailerFunction.Arn
+            Filter:
+              S3Key:
+                Rules:
+                  - { Name: prefix, Value: reports/ }
+                  - { Name: suffix, Value: .csv }
+      Tags:
+        - { Key: PROJECT_NAME, Value: !Ref ProjectName }
+
+  ReportsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Reject plaintext transport to the private reports bucket.
+        must: [Keep the TLS denial on both bucket and object ARNs.]
+    Properties:
+      Bucket: !Ref ReportsBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: RequireTLS
+            Effect: Deny
+            Principal: "*"
+            Action: s3:*
+            Resource:
+              - !Sub "arn:${AWS::Partition}:s3:::${ReportsBucket}"
+              - !Sub "arn:${AWS::Partition}:s3:::${ReportsBucket}/*"
+            Condition:
+              Bool: { "aws:SecureTransport": "false" }
+
+  S3GatewayEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: VPC builder needs S3 without NAT; route tables must match its subnets.
+        must: [Attach to every route table used by the builder subnets.]
+    Properties:
+      VpcId: !Ref VpcId
+      VpcEndpointType: Gateway
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.s3"
+      RouteTableIds: !Ref LambdaRouteTableIds
+
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Retains failed report commands for inspection and redrive.
+        must: [Keep retention long enough to investigate failures.]
+    Properties:
+      QueueName: !Sub "${ProjectName}-report-requests-dlq"
+      MessageRetentionPeriod: 1209600
+      SqsManagedSseEnabled: true
+      Tags:
+        - { Key: PROJECT_NAME, Value: !Ref ProjectName }
+
+  ReportQueue:
+    Type: AWS::SQS::Queue
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Buffers schedule and manual commands; failures retry then go to DLQ.
+        must: [Visibility timeout must remain at least 6x builder timeout.]
+    Properties:
+      QueueName: !Sub "${ProjectName}-report-requests"
+      VisibilityTimeout: 360
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
+        maxReceiveCount: 3
+      Tags:
+        - { Key: PROJECT_NAME, Value: !Ref ProjectName }
+
+  BuilderRole:
+    Type: AWS::IAM::Role
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Grants the VPC builder queue reads and report uploads only.
+        must: [Do not grant SES or broad S3 access.]
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: ReadQueueWriteReports
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [sqs:ReceiveMessage, sqs:DeleteMessage, sqs:GetQueueAttributes]
+                Resource: !GetAtt ReportQueue.Arn
+              - Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub "arn:${AWS::Partition}:s3:::${ProjectName}-reports-${AWS::AccountId}/reports/*"
+      Tags:
+        - { Key: PROJECT_NAME, Value: !Ref ProjectName }
+
+  BuilderLogGroup:
+    Type: AWS::Logs::LogGroup
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Preserves report-builder trigger and storage evidence.
+        must: [Keep retention bounded.]
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ProjectName}-report-builder"
+      RetentionInDays: 7
+      Tags:
+        - { Key: PROJECT_NAME, Value: !Ref ProjectName }
+
+  BuilderFunction:
+    Type: AWS::Lambda::Function
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Reuses backend image and VPC database path; S3 gateway avoids NAT.
+        must:
+          - Image command selects the report handler, not the API handler.
+          - Existing database SG must permit this function SG.
+    Properties:
+      FunctionName: !Sub "${ProjectName}-report-builder"
+      PackageType: Image
+      Code: { ImageUri: !Ref BackendImageUri }
+      ImageConfig:
+        Command: ["app.reports.lambda_handler.handler"]
+      Role: !GetAtt BuilderRole.Arn
+      MemorySize: 512
+      Timeout: 60
+      LoggingConfig: { LogGroup: !Ref BuilderLogGroup }
+      VpcConfig:
+        SubnetIds: !Ref LambdaSubnetIds
+        SecurityGroupIds: [!Ref LambdaSecurityGroupId]
+      Environment:
+        Variables:
+          DATABASE_URL: !Sub "postgresql+asyncpg://${DbUsername}:{{resolve:secretsmanager:${DatabaseSecretArn}:SecretString:password}}@${DatabaseEndpoint}:5432/${DbName}"
+          APP_TIMEZONE: Europe/Kyiv
+          REPORTS_BUCKET: !Sub "${ProjectName}-reports-${AWS::AccountId}"
+      Tags:
+        - { Key: PROJECT_NAME, Value: !Ref ProjectName }
+
+  QueueEventSource:
+    Type: AWS::Lambda::EventSourceMapping
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Lambda service polls SQS outside the VPC and invokes the builder.
+        must: [Keep BatchSize at one unless partial failure handling is added.]
+    Properties:
+      FunctionName: !Ref BuilderFunction
+      EventSourceArn: !GetAtt ReportQueue.Arn
+      BatchSize: 1
+      Enabled: true
+
+  SchedulerRole:
+    Type: AWS::IAM::Role
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Allows the weekly schedule to enqueue or directly invoke during validation.
+        must: [Scope trust to this account and targets to report resources.]
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: scheduler.amazonaws.com }
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals: { "aws:SourceAccount": !Ref "AWS::AccountId" }
+      Policies:
+        - PolicyName: EnqueueWeeklyReport
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt ReportQueue.Arn
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt BuilderFunction.Arn
+      Tags:
+        - { Key: PROJECT_NAME, Value: !Ref ProjectName }
+
+  WeeklySchedule:
+    Type: AWS::Scheduler::Schedule
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Sends previous-week command at Kyiv wall-clock time, including DST.
+        must: [Restore Monday cron after temporary test schedules.]
+    Properties:
+      Name: !Sub "${ProjectName}-weekly-report"
+      ScheduleExpression: !Ref ScheduleExpression
+      ScheduleExpressionTimezone: Europe/Kyiv
+      FlexibleTimeWindow: { Mode: "OFF" }
+      State: ENABLED
+      Target:
+        Arn: !If [DirectSchedule, !GetAtt BuilderFunction.Arn, !GetAtt ReportQueue.Arn]
+        RoleArn: !GetAtt SchedulerRole.Arn
+        Input: '{"week":null,"source":"schedule"}'
+
+  MailerRole:
+    Type: AWS::IAM::Role
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Grants the mailer report reads and SES sending from one identity.
+        must: [Never allow writes under reports/.]
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ReadReportSendEmail
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub "arn:${AWS::Partition}:s3:::${ProjectName}-reports-${AWS::AccountId}/reports/*"
+              - Effect: Allow
+                Action: [ses:SendEmail, ses:SendRawEmail]
+                Resource: !If
+                  - HasSenderDomain
+                  - !Sub "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderDomain}"
+                  - !Sub "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/${ReportFromEmail}"
+      Tags:
+        - { Key: PROJECT_NAME, Value: !Ref ProjectName }
+
+  MailerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Captures S3-triggered send evidence and failures.
+        must: [Keep retention bounded.]
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ProjectName}-report-mailer"
+      RetentionInDays: 7
+      Tags:
+        - { Key: PROJECT_NAME, Value: !Ref ProjectName }
+
+  MailerFunction:
+    Type: AWS::Lambda::Function
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Outside VPC for SES reachability; never writes into reports/.
+        must: [Only S3 ObjectCreated under reports/ invokes this function.]
+    Properties:
+      FunctionName: !Sub "${ProjectName}-report-mailer"
+      Runtime: python3.12
+      Handler: mailer_handler.handler
+      Role: !GetAtt MailerRole.Arn
+      Code:
+        S3Bucket: !Ref MailerCodeBucket
+        S3Key: !Ref MailerCodeKey
+      MemorySize: 128
+      Timeout: 30
+      LoggingConfig: { LogGroup: !Ref MailerLogGroup }
+      Environment:
+        Variables:
+          REPORT_FROM_EMAIL: !Ref ReportFromEmail
+          REPORT_TO_EMAILS: !Ref ReportToEmail
+      Tags:
+        - { Key: PROJECT_NAME, Value: !Ref ProjectName }
+
+  MailerInvokePermission:
+    Type: AWS::Lambda::Permission
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Lets only this account's reports bucket invoke the mailer.
+        must: [Preserve SourceArn and SourceAccount.]
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref MailerFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !Sub "arn:${AWS::Partition}:s3:::${ProjectName}-reports-${AWS::AccountId}"
+      SourceAccount: !Ref "AWS::AccountId"
+
+  SenderDomainIdentity:
+    Type: AWS::SES::EmailIdentity
+    Condition: HasSenderDomain
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Domain sender needs DNS proof; CNAME values are stack outputs.
+        must: [Domain must be owned and DKIM records published before sending.]
+    Properties:
+      EmailIdentity: !Ref SenderDomain
+      Tags:
+        - { Key: PROJECT_NAME, Value: !Ref ProjectName }
+
+  DeadLetterAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Surfaces queued report commands that exhausted retries.
+        must: [Alarm when any DLQ message becomes visible.]
+    Properties:
+      AlarmDescription: A weekly report request failed three times and needs attention.
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - { Name: QueueName, Value: !GetAtt DeadLetterQueue.QueueName }
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+Outputs:
+  ReportsBucketName:
+    Description: Private report storage bucket.
+    Value: !Ref ReportsBucket
+  ReportQueueUrl:
+    Description: Queue URL for make report-now.
+    Value: !Ref ReportQueue
+  ReportQueueArn:
+    Description: Queue ARN for audit and manual testing.
+    Value: !GetAtt ReportQueue.Arn
+  DeadLetterQueueUrl:
+    Description: Failed report requests for redrive.
+    Value: !Ref DeadLetterQueue
+  BuilderFunctionName:
+    Description: Builder function name for direct schedule-shape testing.
+    Value: !Ref BuilderFunction
+  DkimName1:
+    Condition: HasSenderDomain
+    Description: First DKIM CNAME name.
+    Value: !GetAtt SenderDomainIdentity.DkimDNSTokenName1
+  DkimValue1:
+    Condition: HasSenderDomain
+    Description: First DKIM CNAME value.
+    Value: !GetAtt SenderDomainIdentity.DkimDNSTokenValue1
+  DkimName2:
+    Condition: HasSenderDomain
+    Description: Second DKIM CNAME name.
+    Value: !GetAtt SenderDomainIdentity.DkimDNSTokenName2
+  DkimValue2:
+    Condition: HasSenderDomain
+    Description: Second DKIM CNAME value.
+    Value: !GetAtt SenderDomainIdentity.DkimDNSTokenValue2
+  DkimName3:
+    Condition: HasSenderDomain
+    Description: Third DKIM CNAME name.
+    Value: !GetAtt SenderDomainIdentity.DkimDNSTokenName3
+  DkimValue3:
+    Condition: HasSenderDomain
+    Description: Third DKIM CNAME value.
+    Value: !GetAtt SenderDomainIdentity.DkimDNSTokenValue3

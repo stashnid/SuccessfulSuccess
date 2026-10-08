@@ -18,7 +18,7 @@ ECS_SERVICE                ?= spry-service
 ECR_REGISTRY               ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
 IMAGE_URI                  ?= $(ECR_REGISTRY)/$(ECR_REPOSITORY):$(IMAGE_TAG)
 
-.PHONY: deploy-frontend deploy-backend connect-api configure-backend-auth
+.PHONY: deploy-frontend deploy-backend connect-api configure-backend-auth report-now report-objects
 
 # Lab 3 stretch: publish a same-origin /api/* route and configure the running
 # backend to verify Cognito access tokens. Neither target rebuilds the image.
@@ -49,3 +49,16 @@ deploy-backend:
 	docker push $(IMAGE_URI)
 	@echo "==> Forcing new deployment on ECS Fargate service $(ECS_SERVICE) in cluster $(ECS_CLUSTER)..."
 	aws ecs update-service --cluster $(ECS_CLUSTER) --service $(ECS_SERVICE) --force-new-deployment --region $(AWS_REGION)
+
+# Weekly reports stack: manual trigger and submission evidence.
+REPORTS_STACK ?= successfulsuccess-reports
+REPORTS_BUCKET ?= successfulsuccess-reports-$(AWS_ACCOUNT_ID)
+
+report-now:
+	@case "$(WEEK)" in ????-W??) ;; *) echo 'Usage: make report-now WEEK=2026-W40' >&2; exit 2;; esac
+	@queue_url=$$(aws cloudformation describe-stacks --stack-name "$(REPORTS_STACK)" --region "$(AWS_REGION)" --query 'Stacks[0].Outputs[?OutputKey==`ReportQueueUrl`].OutputValue | [0]' --output text) && \
+	aws sqs send-message --region "$(AWS_REGION)" --queue-url "$$queue_url" \
+	  --message-body "$$(printf '{"week":"%s","source":"report-now"}' '$(WEEK)')"
+
+report-objects:
+	aws s3 ls "s3://$(REPORTS_BUCKET)/reports/" --recursive --region "$(AWS_REGION)"

@@ -1,5 +1,6 @@
 """AWS Lambda entry point: the API behind the function URL, plus on-demand migrations."""
 
+import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -22,6 +23,16 @@ def migrate() -> None:
     command.upgrade(Config(str(ALEMBIC_INI)), "head")
 
 
+async def _import_and_close(data: dict) -> dict[str, int]:
+    from app.db import engine
+    from app.legacy_import import import_legacy_data
+
+    try:
+        return await import_legacy_data(data)
+    finally:
+        await engine.dispose()
+
+
 def handler(event, context):
     # `make aws-migrate` invokes the function directly with this payload.
     # Function URL events never carry an "action" key, so no request can.
@@ -31,4 +42,8 @@ def handler(event, context):
         with ThreadPoolExecutor(max_workers=1) as pool:
             pool.submit(migrate).result()
         return {"status": "migrated"}
+    if event.get("action") == "import_legacy":
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            counts = pool.submit(asyncio.run, _import_and_close(event["data"])).result()
+        return {"status": "imported", "counts": counts}
     return api(event, context)

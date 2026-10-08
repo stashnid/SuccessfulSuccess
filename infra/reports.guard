@@ -1,0 +1,20 @@
+# Run: cfn-guard validate --rules infra/reports.guard --data infra/reports.yml
+
+rule private_reports_bucket {
+    Resources.ReportsBucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls == true
+    Resources.ReportsBucket.Properties.PublicAccessBlockConfiguration.BlockPublicPolicy == true
+    Resources.ReportsBucket.Properties.PublicAccessBlockConfiguration.IgnorePublicAcls == true
+    Resources.ReportsBucket.Properties.PublicAccessBlockConfiguration.RestrictPublicBuckets == true
+    Resources.ReportsBucket.DeletionPolicy == 'Retain'
+    Resources.ReportsBucket.UpdateReplacePolicy == 'Retain'
+}
+
+rule queue_retry_window {
+    Resources.ReportQueue.Properties.VisibilityTimeout >= 360
+    Resources.ReportQueue.Properties.SqsManagedSseEnabled == true
+    Resources.DeadLetterQueue.Properties.SqsManagedSseEnabled == true
+}
+
+rule mailer_stays_outside_vpc {
+    Resources.MailerFunction.Properties.VpcConfig !exists
+}

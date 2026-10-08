@@ -5,6 +5,10 @@ Description: >-
   that pauses (scales to zero) when idle. The same function applies the
   migrations when invoked directly.
 
+Metadata:
+  AWSToolsMetrics:
+    AWSAgentToolkit: aws-cloudformation@3
+
 Parameters:
   ProjectName:
     Type: String
@@ -92,15 +96,10 @@ Parameters:
     Type: String
     Default: app
 
-  DbPassword:
+  ExistingDbSecretArn:
     Type: String
-    NoEcho: true
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: "[a-zA-Z0-9_-]+"
-    Description: >-
-      Master password. Letters, digits, underscore and dash only: it is embedded
-      in a connection URL, where other characters would need escaping.
+    Default: ""
+    Description: Optional retained database secret ARN from an earlier stack attempt.
 
   AppTimezone:
     Type: String
@@ -134,6 +133,8 @@ Parameters:
 Conditions:
   HasDbEngineVersion: !Not [!Equals [!Ref DbEngineVersion, ""]]
   HasMaxConcurrency: !Not [!Equals [!Ref MaxConcurrency, 0]]
+  HasExistingDbSecret: !Not [!Equals [!Ref ExistingDbSecretArn, ""]]
+  CreateDbSecret: !Equals [!Ref ExistingDbSecretArn, ""]
 
 Resources:
   # --- networking -----------------------------------------------------------
@@ -177,19 +178,42 @@ Resources:
         - Key: PROJECT_NAME
           Value: !Ref ProjectName
 
+  DbSecret:
+    Type: AWS::SecretsManager::Secret
+    Condition: CreateDbSecret
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Generates a URL-safe database password without storing it in template parameters.
+        must: [Keep the secret with the retained database cluster.]
+    Properties:
+      Name: !Sub "${ProjectName}-db-credentials"
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username":"${DbUsername}"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludePunctuation: true
+      Tags:
+        - { Key: PROJECT_NAME, Value: !Ref ProjectName }
+
   DbCluster:
     Type: AWS::RDS::DBCluster
-    # A demo stack: `make aws-destroy` should leave nothing billable behind.
-    # The default (Snapshot) would keep charging for snapshot storage.
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Persistent meetings data; retain the cluster during stack deletion or replacement.
+        must: [Take an explicit backup before any manual database deletion.]
     Properties:
       DBClusterIdentifier: !Sub "${ProjectName}-db"
       Engine: aurora-postgresql
       EngineVersion: !If [HasDbEngineVersion, !Ref DbEngineVersion, !Ref "AWS::NoValue"]
       DatabaseName: !Ref DbName
       MasterUsername: !Ref DbUsername
-      MasterUserPassword: !Ref DbPassword
+      MasterUserPassword: !Sub
+        - "{{resolve:secretsmanager:${SecretArn}:SecretString:password}}"
+        - SecretArn: !If [HasExistingDbSecret, !Ref ExistingDbSecretArn, !Ref DbSecret]
       DBSubnetGroupName: !Ref DbSubnetGroup
       VpcSecurityGroupIds:
         - !Ref DbSecurityGroup
@@ -207,8 +231,12 @@ Resources:
   # Serverless v2 capacity lives on instances; one writer is enough here.
   DbInstance:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Writer for the retained Aurora cluster.
+        must: [Keep it until the data migration and report tests are verified.]
     Properties:
       DBInstanceIdentifier: !Sub "${ProjectName}-db-1"
       DBClusterIdentifier: !Ref DbCluster
@@ -273,12 +301,11 @@ Resources:
           - !Ref FunctionSecurityGroup
       Environment:
         Variables:
-          # NOTE: the password ends up readable in the function configuration.
-          # Moving it to SSM Parameter Store is the first thing to harden here.
           DATABASE_URL: !Sub
-            - "postgresql+asyncpg://${DbUsername}:${DbPassword}@${Endpoint}:${Port}/${DbName}"
+            - "postgresql+asyncpg://${DbUsername}:{{resolve:secretsmanager:${SecretArn}:SecretString:password}}@${Endpoint}:${Port}/${DbName}"
             - Endpoint: !GetAtt DbCluster.Endpoint.Address
               Port: !GetAtt DbCluster.Endpoint.Port
+              SecretArn: !If [HasExistingDbSecret, !Ref ExistingDbSecretArn, !Ref DbSecret]
           APP_TIMEZONE: !Ref AppTimezone
           CORS_ORIGINS: !Ref CorsOrigins
           LOG_LEVEL: !Ref LogLevel
@@ -338,6 +365,9 @@ Outputs:
   DatabaseEndpoint:
     Description: Aurora cluster (writer) endpoint, private to the VPC
     Value: !GetAtt DbCluster.Endpoint.Address
+  DatabaseSecretArn:
+    Description: Database credential ARN; do not print its secret value.
+    Value: !If [HasExistingDbSecret, !Ref ExistingDbSecretArn, !Ref DbSecret]
   FunctionName:
     Value: !Ref ApiFunction
   LogGroupName:
