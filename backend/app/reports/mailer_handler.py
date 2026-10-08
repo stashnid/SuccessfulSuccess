@@ -8,6 +8,7 @@ from urllib.parse import unquote_plus
 import boto3
 
 log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
 s3 = boto3.client("s3")
 ses = boto3.client("sesv2")
 

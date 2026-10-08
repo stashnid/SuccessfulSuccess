@@ -18,3 +18,9 @@ rule queue_retry_window {
 rule mailer_stays_outside_vpc {
     Resources.MailerFunction.Properties.VpcConfig !exists
 }
+
+rule builder_stays_outside_vpc {
+    Resources.BuilderFunction.Properties.VpcConfig !exists
+    Resources.BuilderFunction.Properties.Environment.Variables.DATABASE_SECRET_ARN exists
+    Resources.BuilderFunction.Properties.Environment.Variables.DATABASE_URL !exists
+}

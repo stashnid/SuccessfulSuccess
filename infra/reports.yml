@@ -1,7 +1,8 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
-  Weekly meetings CSV reports: Scheduler and manual requests share SQS, a VPC
-  builder stores files on S3, and an S3-triggered public Lambda emails them.
+  Weekly meetings CSV reports: Scheduler and manual requests share SQS, a
+  Lambda reads the existing database and stores files on S3, and an S3-triggered
+  mailer sends them through SES. All functions run outside a VPC.
 
 Metadata:
   AWSToolsMetrics:
@@ -17,32 +18,12 @@ Parameters:
     Type: String
     Default: successfulsuccess
     AllowedPattern: "[a-z0-9-]+"
-  VpcId:
-    Type: AWS::EC2::VPC::Id
-  LambdaSubnetIds:
-    Type: List<AWS::EC2::Subnet::Id>
-    Description: Subnets used by the existing API Lambda and Aurora.
-  LambdaRouteTableIds:
-    Type: List<String>
-    Description: Route tables associated with the Lambda subnets.
-  LambdaSecurityGroupId:
-    Type: AWS::EC2::SecurityGroup::Id
-    Description: Existing API Lambda security group allowed into Aurora.
   BackendImageUri:
     Type: String
-    Description: Existing backend Lambda image URI pinned by digest.
-  DatabaseEndpoint:
-    Type: String
-    Description: Aurora writer endpoint from the backend stack.
-  DbName:
-    Type: String
-    Default: meetings
-  DbUsername:
-    Type: String
-    Default: app
+    Description: Backend Lambda image URI pinned by digest.
   DatabaseSecretArn:
     Type: String
-    Description: Database credential ARN from the backend stack.
+    Description: Secrets Manager ARN containing the existing database URL under url.
   MailerCodeBucket:
     Type: String
     Description: Existing private artifact bucket containing the mailer zip.
@@ -140,18 +121,6 @@ Resources:
             Condition:
               Bool: { "aws:SecureTransport": "false" }
 
-  S3GatewayEndpoint:
-    Type: AWS::EC2::VPCEndpoint
-    Metadata:
-      com.aws.cloudformation.Context:
-        why: VPC builder needs S3 without NAT; route tables must match its subnets.
-        must: [Attach to every route table used by the builder subnets.]
-    Properties:
-      VpcId: !Ref VpcId
-      VpcEndpointType: Gateway
-      ServiceName: !Sub "com.amazonaws.${AWS::Region}.s3"
-      RouteTableIds: !Ref LambdaRouteTableIds
-
   DeadLetterQueue:
     Type: AWS::SQS::Queue
     Metadata:
@@ -185,7 +154,7 @@ Resources:
     Type: AWS::IAM::Role
     Metadata:
       com.aws.cloudformation.Context:
-        why: Grants the VPC builder queue reads and report uploads only.
+        why: Grants the builder queue reads, its database secret and report uploads.
         must: [Do not grant SES or broad S3 access.]
     Properties:
       AssumeRolePolicyDocument:
@@ -195,7 +164,7 @@ Resources:
             Principal: { Service: lambda.amazonaws.com }
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
         - PolicyName: ReadQueueWriteReports
           PolicyDocument:
@@ -204,6 +173,9 @@ Resources:
               - Effect: Allow
                 Action: [sqs:ReceiveMessage, sqs:DeleteMessage, sqs:GetQueueAttributes]
                 Resource: !GetAtt ReportQueue.Arn
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref DatabaseSecretArn
               - Effect: Allow
                 Action: s3:PutObject
                 Resource: !Sub "arn:${AWS::Partition}:s3:::${ProjectName}-reports-${AWS::AccountId}/reports/*"
@@ -226,26 +198,24 @@ Resources:
     Type: AWS::Lambda::Function
     Metadata:
       com.aws.cloudformation.Context:
-        why: Reuses backend image and VPC database path; S3 gateway avoids NAT.
+        why: Reuses backend image and reads the existing PostgreSQL pooler without VPC cost.
         must:
           - Image command selects the report handler, not the API handler.
-          - Existing database SG must permit this function SG.
+          - Keep the database URL in Secrets Manager, not a Lambda environment value.
     Properties:
       FunctionName: !Sub "${ProjectName}-report-builder"
       PackageType: Image
+      Architectures: [arm64]
       Code: { ImageUri: !Ref BackendImageUri }
       ImageConfig:
         Command: ["app.reports.lambda_handler.handler"]
       Role: !GetAtt BuilderRole.Arn
-      MemorySize: 512
+      MemorySize: 1024
       Timeout: 60
       LoggingConfig: { LogGroup: !Ref BuilderLogGroup }
-      VpcConfig:
-        SubnetIds: !Ref LambdaSubnetIds
-        SecurityGroupIds: [!Ref LambdaSecurityGroupId]
       Environment:
         Variables:
-          DATABASE_URL: !Sub "postgresql+asyncpg://${DbUsername}:{{resolve:secretsmanager:${DatabaseSecretArn}:SecretString:password}}@${DatabaseEndpoint}:5432/${DbName}"
+          DATABASE_SECRET_ARN: !Ref DatabaseSecretArn
           APP_TIMEZONE: Europe/Kyiv
           REPORTS_BUCKET: !Sub "${ProjectName}-reports-${AWS::AccountId}"
       Tags:

@@ -1,101 +1,65 @@
-# Weekly reports laboratory: implementation and deployment
+# Weekly reports laboratory: Free plan deployment
 
-The checked-in `infra/reports.yml` is a **new** stack for the Lambda + Aurora
-architecture required by the assignment. The former deployment is ECS/ALB +
-Supabase. Deploy `infra/backend.yml` in parallel, apply its migrations, transfer
-the existing rows with `scripts/migrate-ecs-data.py`, and verify the new API
-before pointing the website at it. Keep the old ECS service until the cutover
-has been checked.
+The current website runs on CloudFront, ECS and Supabase. This lab keeps that
+working application and adds the AWS event-driven reporting path separately:
 
-## Account limitation observed on 2026-10-08
+`EventBridge Scheduler or make report-now -> SQS -> report-builder Lambda ->
+S3 reports/<ISO-week>.csv -> S3 ObjectCreated -> report-mailer Lambda -> SES`.
 
-The AWS account is on the Free plan. A CloudFormation change set for the
-private Aurora cluster was accepted, but RDS rejected creation with
-`To use Aurora clusters with free plan accounts you need to set
-WithExpressConfiguration`. Aurora Express has no VPC association and uses IAM
-authentication through an internet gateway, so it cannot serve as the private
-VPC/Aurora prerequisite described by this lab. The failed stack was rolled
-back and removed; no Aurora cluster was created. The generated database secret
-was retained and can be reused by passing its ARN as `ExistingDbSecretArn`
-after the account can create a full-configuration cluster.
+The account's Free plan rejected the earlier private Aurora stack with
+`WithExpressConfiguration` required. The lecturer permits an alternative
+architecture when the complete feature works. Therefore the builder reads the
+existing Supabase PostgreSQL database through its IPv4 session pooler. Both
+Lambda functions run outside a VPC, so they need neither NAT nor an S3 gateway
+endpoint. The website and ECS API continue to use the same database. The
+unusable private-Aurora template remains in `infra/backend.yml` as a record of
+the original lab design; it is not deployed on this account.
 
-The Lambda image is already in the `spry-backend` ECR repository under the
-`lab5-reports` tag. The mailer zip is in the private
-`successfulsuccess-artifacts-312209831599` bucket. The sender email identity
-is verified in SES, but the account is still in the SES sandbox. The reports
-stack has not been deployed because it depends on the backend stack.
+The builder's database URL is stored under the `url` key in the existing
+Secrets Manager secret `successfulsuccess-db-credentials`. The Lambda receives
+only that secret's ARN and has permission to read only that secret. Never copy
+the URL into CloudFormation parameters, Git, logs or screenshots. The existing
+ECS task also has a database URL and should be migrated to a secret in a
+separate hardening change.
 
-## Event flow
+## Behavior
 
-`Scheduler -> SQS -> report-builder (VPC/Aurora) -> S3 reports/<ISO-week>.csv
--> S3 ObjectCreated -> report-mailer (outside VPC) -> SES`.
+The schedule sends `{"week":null,"source":"schedule"}` each Monday at
+07:00 Europe/Kyiv. The builder chooses the preceding ISO week. Manual requests
+use `make report-now WEEK=2026-W40` and an explicit week. Each week has one S3
+key, so replay overwrites the CSV, but S3 emits another ObjectCreated event and
+SES can send a second email. SQS retries failed builds three times before the
+dead-letter queue. Report files expire after 90 days; the bucket is retained
+if its stack is deleted.
 
-The schedule sends `{"week":null,"source":"schedule"}`. The builder chooses
-the previous ISO week in Europe/Kyiv. `make report-now WEEK=2026-W39` sends the
-same command shape with an explicit week and `source=report-now`. Each week has
-one object key; replay overwrites it, but S3 emits another ObjectCreated event
-and the mailer can send another email. The queue has a DLQ after three attempts.
+The SES sender and recipient are the same verified email address while the
+account remains in the SES sandbox. No custom domain is required for this lab.
 
-The builder shares the API's image and security group so the existing Aurora
-ingress rule applies. It reaches S3 through a gateway endpoint in its subnet
-route tables. The mailer has no VPC attachment or DB access. Its IAM permission
-is limited to reading `reports/*` and sending from the configured SES identity.
+## Deployment inputs
 
-## Prerequisites for a deployment
+- ECR image built from `backend/Dockerfile.lambda`, pinned by digest.
+- The existing database secret ARN, with `url` holding the current pooler URL.
+- A private S3 artifact bucket containing the mailer zip at an immutable key.
+- A verified SES sender and recipient in `us-east-1`.
 
-1. A working `infra/backend.yml` stack in us-east-1 with its image in ECR,
-   VPC/subnets/route tables, security group and Aurora database. Migrations
-   and meeting data must already exist.
-2. The database secret ARN from the backend stack's `DatabaseSecretArn` output.
-   The backend stack generates the password in Secrets Manager. Both functions
-   use a CloudFormation dynamic reference to resolve it when deployed; do not
-   place the credential in Git or a plain CloudFormation parameter.
-3. A private S3 artifact bucket containing a zip file with
-   `backend/app/reports/mailer_handler.py` at the zip root. Do not use the
-   website's CloudFront origin bucket unless its distribution and policy block
-   public access to the code artifact.
-4. A sender identity and a recipient address verified in SES in the deployment
-   region while the account remains in the SES sandbox. Supplying `SenderDomain`
-   to the stack creates a domain identity and outputs three DKIM CNAME pairs.
-   Publish them in the domain's DNS before expecting mail to send. Without an
-   owned domain, pre-verify the sender **email** identity in SES before the
-   stack is deployed. That is an alternative to the exact domain step in the
-   assignment and should be agreed with the lecturer.
+`infra/reports.yml` creates the report bucket, queue and DLQ, Lambda functions,
+schedule, S3 notification, IAM roles, seven-day log retention, and a DLQ alarm.
 
-`ReportFromEmail`, `ReportToEmail` and `SenderDomain` are deployment parameters,
-not constants in the report code. The CloudFormation stack is tagged through
-`ProjectName` where the service supports tags. Reports expire after 90 days;
-the bucket itself is retained on stack deletion to avoid silent data loss.
+## Verification and submission evidence
 
-## Verification and evidence
+1. Test the CSV builder locally against PostgreSQL.
+2. Deploy with a temporary direct schedule (`ScheduleTarget=LAMBDA`,
+   `ScheduleExpression=rate(5 minutes)`) to capture a `trigger=schedule` log.
+3. Switch the schedule to SQS. Capture a `trigger=sqs source=schedule` log, then
+   restore the Monday cron expression.
+4. Run `make report-now WEEK=<different-week>` and check that S3 has two report
+   keys, builder logs show `trigger=sqs source=report-now`, mailer logs show
+   `trigger=s3`, and SES delivered the CSV attachment. Take an inbox screenshot.
+5. Exercise the DLQ and replay path without leaving failure injection enabled.
+   Send the same week twice and explain why duplicate email is possible.
 
-1. Test the CSV generator against the local Compose PostgreSQL database before
-   deployment. Use two distinct weeks so the object listing has two keys.
-2. First deploy with `ScheduleTarget=LAMBDA` and
-   `ScheduleExpression=rate(5 minutes)` to capture a genuine direct schedule
-   log. Then update the stack with `ScheduleTarget=SQS`, keep the temporary
-   rate until an SQS-driven schedule has run, and restore the Monday cron.
-3. Run `make report-now WEEK=<another-week>`. Expect builder logs with
-   `trigger=sqs source=report-now`, a mailer log with `trigger=s3`, and a
-   delivered CSV attachment. The scheduled SQS invocation has
-   `trigger=sqs source=schedule`; the first direct stage produces
-   `trigger=schedule source=schedule`.
-4. Run `make report-objects` for the S3 listing to submit. Capture the email
-   screenshot in the real recipient inbox.
-5. Send a deliberately failing week, observe three receives and the DLQ,
-   remove the failure and redrive the message. Do not leave a failure injection
-   enabled in the deployed code.
-
-## Written answers required in Part 3, Step 7
-
-- Email sending is not idempotent. Store a sent marker keyed by the report week
-  plus recipient (or immutable report version plus recipient) in a durable
-  conditional-write store before sending, with a strategy for the crash window
-  between marking and sending.
-- The VPC builder cannot reach SES without a network path. NAT, an SES
-  interface endpoint (for supported SES APIs), or this separate outside-VPC
-  mailer are the proposed options. Compare the current regional prices before
-  quoting monthly numbers in the submission.
-- A week-long download link cannot depend on a short-lived Lambda role
-  credential. Use a long-lived signing mechanism such as CloudFront signed URLs
-  backed by the private S3 object, with a seven-day policy.
+Submit the commit link, inbox screenshot, recursive S3 listing with both
+reports, three CloudWatch trigger lines, and short Part 3 Step 7 answers.
+Explain in the write-up that the deployed builder is outside a VPC because it
+reads Supabase; the assignment's Aurora network-cost comparison remains a
+design discussion rather than a claim about the deployed topology.

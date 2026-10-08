@@ -6,13 +6,12 @@ import re
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
 from app.config import settings
 from app.db import SessionFactory
 from app.models import Meeting, User
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 WEEK_PATTERN = re.compile(r"^(\d{4})-W(\d{2})$")
 

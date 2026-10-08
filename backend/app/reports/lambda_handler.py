@@ -6,11 +6,11 @@ import logging
 import os
 
 import boto3
-
 from app.db import engine
 from app.reports.weekly import build_weekly_report, previous_iso_week, report_key
 
 log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
 s3 = boto3.client("s3")
 
 
