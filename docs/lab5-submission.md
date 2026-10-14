@@ -61,8 +61,9 @@ messages. The builder then logged
 stored `reports/2026-W38.csv` at 13:33:13. The mailer logged `trigger=s3`
 at 13:33:15 and `sent ... recipients=1` at 13:33:16. The Lambda's actual
 database-secret ARN was verified restored. The DLQ CloudWatch alarm has the
-SNS topic as an alarm action. Its email subscription requires the recipient to
-confirm the new AWS Notifications message once.
+SNS topic as an alarm action. The operator confirmed its email subscription
+on 2026-10-14, and the alarm returned to `OK` at 16:40 Kyiv time after the
+queue emptied.
 
 ## Evidence to submit
 
