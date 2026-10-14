@@ -372,14 +372,73 @@ Resources:
       Tags:
         - { Key: PROJECT_NAME, Value: !Ref ProjectName }
 
+  DeadLetterAlertTopic:
+    Type: AWS::SNS::Topic
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Notifies the report operator when a request exhausts queue retries.
+        must: [Email subscription requires recipient confirmation.]
+    Properties:
+      TopicName: !Sub "${ProjectName}-report-dlq-alerts"
+      Tags:
+        - { Key: PROJECT_NAME, Value: !Ref ProjectName }
+
+  DeadLetterAlertTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Allows only this account's named CloudWatch alarm to publish alerts.
+        must: [Keep SourceArn and SourceAccount conditions.]
+    Properties:
+      Topics: [!Ref DeadLetterAlertTopic]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowAccountManagement
+            Effect: Allow
+            Principal: { AWS: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:root" }
+            Action:
+              - sns:GetTopicAttributes
+              - sns:SetTopicAttributes
+              - sns:AddPermission
+              - sns:RemovePermission
+              - sns:DeleteTopic
+              - sns:Subscribe
+              - sns:ListSubscriptionsByTopic
+              - sns:Publish
+            Resource: !Ref DeadLetterAlertTopic
+          - Sid: AllowReportAlarm
+            Effect: Allow
+            Principal: { Service: cloudwatch.amazonaws.com }
+            Action: sns:Publish
+            Resource: !Ref DeadLetterAlertTopic
+            Condition:
+              ArnLike:
+                "aws:SourceArn": !Sub "arn:${AWS::Partition}:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${AWS::StackName}-DeadLetterAlarm-*"
+              StringEquals:
+                "aws:SourceAccount": !Ref "AWS::AccountId"
+
+  DeadLetterAlertSubscription:
+    Type: AWS::SNS::Subscription
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Sends alarm emails to the same operator who receives reports.
+        must: [The operator must confirm the SNS email subscription.]
+    Properties:
+      Protocol: email
+      Endpoint: !Ref ReportToEmail
+      TopicArn: !Ref DeadLetterAlertTopic
+
   DeadLetterAlarm:
     Type: AWS::CloudWatch::Alarm
+    DependsOn: DeadLetterAlertTopicPolicy
     Metadata:
       com.aws.cloudformation.Context:
         why: Surfaces queued report commands that exhausted retries.
         must: [Alarm when any DLQ message becomes visible.]
     Properties:
       AlarmDescription: A weekly report request failed three times and needs attention.
+      AlarmActions: [!Ref DeadLetterAlertTopic]
       Namespace: AWS/SQS
       MetricName: ApproximateNumberOfMessagesVisible
       Dimensions:
@@ -407,6 +466,9 @@ Outputs:
   BuilderFunctionName:
     Description: Builder function name for direct schedule-shape testing.
     Value: !Ref BuilderFunction
+  DeadLetterAlertTopicArn:
+    Description: SNS topic for failed-report alarm notifications.
+    Value: !Ref DeadLetterAlertTopic
   DkimName1:
     Condition: HasSenderDomain
     Description: First DKIM CNAME name.

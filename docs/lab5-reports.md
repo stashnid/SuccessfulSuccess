@@ -44,14 +44,18 @@ account remains in the SES sandbox. No custom domain is required for this lab.
 
 `infra/reports.yml` creates the report bucket, queue and DLQ, Lambda functions,
 schedule, S3 notification, IAM roles, seven-day log retention, and a DLQ alarm.
+The alarm publishes to a dedicated SNS topic. Its email subscription must be
+confirmed once by the operator before failure alerts can reach the inbox.
 
 ## Verification and submission evidence
 
 1. Test the CSV builder locally against PostgreSQL.
-2. Deploy with a temporary direct schedule (`ScheduleTarget=LAMBDA`,
-   `ScheduleExpression=rate(5 minutes)`) to capture a `trigger=schedule` log.
-3. Switch the schedule to SQS. Capture a `trigger=sqs source=schedule` log, then
-   restore the Monday cron expression.
+2. For a direct-trigger check, create a separate one-time Scheduler schedule
+   with `ActionAfterCompletion=DELETE` targeting the builder. Capture its
+   `trigger=schedule` log. Avoid a repeating test schedule: every run creates
+   another S3 event and email.
+3. Keep the production schedule targeting SQS. Confirm its Monday run logs
+   `trigger=sqs source=schedule` and sends one CSV.
 4. Run `make report-now WEEK=<different-week>` and check that S3 has two report
    keys, builder logs show `trigger=sqs source=report-now`, mailer logs show
    `trigger=s3`, and SES delivered the CSV attachment. Take an inbox screenshot.

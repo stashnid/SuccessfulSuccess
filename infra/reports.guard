@@ -24,3 +24,9 @@ rule builder_stays_outside_vpc {
     Resources.BuilderFunction.Properties.Environment.Variables.DATABASE_SECRET_ARN exists
     Resources.BuilderFunction.Properties.Environment.Variables.DATABASE_URL !exists
 }
+
+rule dlq_alarm_notifies_operator {
+    Resources.DeadLetterAlarm.Properties.AlarmActions exists
+    Resources.DeadLetterAlertTopicPolicy.Properties.PolicyDocument.Statement[Sid == 'AllowReportAlarm'].Condition.ArnLike."aws:SourceArn" exists
+    Resources.DeadLetterAlertTopicPolicy.Properties.PolicyDocument.Statement[Sid == 'AllowReportAlarm'].Condition.StringEquals."aws:SourceAccount" exists
+}
