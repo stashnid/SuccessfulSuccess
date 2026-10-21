@@ -120,3 +120,52 @@ async def test_health_reports_database_ok(client):
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "database": "ok", "version": "1.0.0"}
+
+
+async def test_save_agenda_keeps_reviewed_version_and_original_suggestion(client, meeting_payload):
+    created = (await client.post("/api/v1/meetings", json=meeting_payload)).json()
+    suggestion = {
+        "title": "Pricing review",
+        "starts_at": None,
+        "duration_minutes": 45,
+        "items": [{"topic": "Pro plans", "owner": "Taras", "minutes": 15}],
+        "action_items": [],
+        "language": "en",
+    }
+    reviewed = {**suggestion, "items": [{"topic": "Pro plans", "owner": "Olena", "minutes": 15}]}
+
+    response = await client.put(
+        f"/api/v1/meetings/{created['id']}/agenda",
+        json={
+            "agenda": reviewed,
+            "ai_suggestion": suggestion,
+            "model": "anthropic.claude-haiku-5-5",
+            "prompt_version": "agenda-v1",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    fetched = (await client.get(f"/api/v1/meetings/{created['id']}")).json()
+    assert fetched["agenda"]["items"][0]["owner"] == "Olena"
+    assert fetched["ai_suggestion"]["agenda"]["items"][0]["owner"] == "Taras"
+
+
+async def test_save_agenda_rejects_empty_topics(client, meeting_payload):
+    created = (await client.post("/api/v1/meetings", json=meeting_payload)).json()
+    response = await client.put(
+        f"/api/v1/meetings/{created['id']}/agenda",
+        json={"agenda": {"items": [], "language": "en"}},
+    )
+    assert response.status_code == 422
+
+
+async def test_save_agenda_cannot_change_another_users_meeting(
+    client, other_client, meeting_payload
+):
+    created = (await client.post("/api/v1/meetings", json=meeting_payload)).json()
+    response = await other_client.put(
+        f"/api/v1/meetings/{created['id']}/agenda",
+        json={"agenda": {"items": [{"topic": "Changed"}], "language": "en"}},
+    )
+    assert response.status_code == 404
+    assert (await client.get(f"/api/v1/meetings/{created['id']}")).json()["agenda"] is None

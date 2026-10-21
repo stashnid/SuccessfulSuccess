@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Meeting, Participant
 from app.schemas import MeetingCreate
+from app.schemas.meeting import AgendaSave
 
 
 class MeetingRepository:
@@ -93,6 +94,21 @@ class MeetingRepository:
         )
         await self.session.commit()
         return bool(result.rowcount)
+
+    async def save_agenda(self, meeting: Meeting, payload: AgendaSave) -> Meeting:
+        meeting.agenda = payload.agenda.model_dump(mode="json")
+        meeting.ai_suggestion = (
+            {
+                "agenda": payload.ai_suggestion.model_dump(mode="json"),
+                "model": payload.model,
+                "prompt_version": payload.prompt_version,
+            }
+            if payload.ai_suggestion is not None
+            else None
+        )
+        await self.session.commit()
+        await self.session.refresh(meeting)
+        return meeting
 
     async def count(self) -> int:
         return int(

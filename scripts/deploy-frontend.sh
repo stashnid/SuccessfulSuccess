@@ -10,6 +10,7 @@ account="${AWS_ACCOUNT_ID:-312209831599}"
 bucket="${S3_BUCKET:-spry-frontend-stashnid}"
 distribution="${CLOUDFRONT_DISTRIBUTION_ID:-E1JHP5CPE2153L}"
 auth_stack="${AUTH_STACK:-successfulsuccess-auth}"
+ai_stack="${AI_STACK:-successfulsuccess-ai}"
 
 actual_account="$(aws sts get-caller-identity --query Account --output text)"
 if [[ "$actual_account" != "$account" ]]; then
@@ -25,8 +26,14 @@ stack_output() {
 pool_id="$(stack_output UserPoolId)"
 client_id="$(stack_output UserPoolClientId)"
 domain="$(stack_output HostedDomain)"
+parser_url="$(aws cloudformation describe-stacks --stack-name "$ai_stack" --region "$region" \
+  --query "Stacks[0].Outputs[?OutputKey=='ParserUrl'].OutputValue|[0]" --output text)"
 if [[ -z "$pool_id" || -z "$client_id" || -z "$domain" || "$pool_id" == None ]]; then
   echo "Cognito outputs are missing from $auth_stack" >&2
+  exit 1
+fi
+if [[ -z "$parser_url" || "$parser_url" == None ]]; then
+  echo "Parser URL is missing from $ai_stack" >&2
   exit 1
 fi
 
@@ -37,6 +44,7 @@ NEXT_OUTPUT=export NEXT_TELEMETRY_DISABLED=1 \
   NEXT_PUBLIC_COGNITO_CLIENT_ID="$client_id" \
   NEXT_PUBLIC_COGNITO_DOMAIN="$domain" \
   NEXT_PUBLIC_API_BASE_URL="${PUBLIC_API_URL:-}" \
+  NEXT_PUBLIC_PARSER_URL="$parser_url" \
   npm run build -- --webpack
 
 aws s3 sync out "s3://$bucket/" --exclude '.gitkeep' --delete --only-show-errors

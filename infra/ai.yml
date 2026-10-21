@@ -1,0 +1,137 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Cognito-protected Claude agenda parser on Bedrock, with a monthly cost alert.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: successfulsuccess
+    AllowedPattern: "[a-z0-9-]+"
+  BackendImageUri:
+    Type: String
+    Description: Backend Lambda container image URI pinned by digest.
+  CognitoUserPoolId:
+    Type: String
+  CognitoClientId:
+    Type: String
+  SiteOrigin:
+    Type: String
+    Description: Exact HTTPS origin serving the frontend, without trailing slash.
+  BudgetEmail:
+    Type: String
+    Description: Email destination for monthly AWS cost alerts.
+  ParserModel:
+    Type: String
+    Default: us.anthropic.claude-haiku-4-5-20251001-v1:0
+    AllowedValues:
+      - us.anthropic.claude-haiku-4-5-20251001-v1:0
+      - anthropic.claude-haiku-5-5
+      - anthropic.claude-sonnet-5-5
+      - anthropic.claude-opus-5-5
+
+Resources:
+  ParserRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: BedrockMantleInference
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock-mantle:CreateInference
+                Resource: "*"
+      Tags:
+        - { Key: PROJECT_NAME, Value: !Ref ProjectName }
+
+  ParserLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ProjectName}-agenda-parser"
+      RetentionInDays: 7
+      Tags:
+        - { Key: PROJECT_NAME, Value: !Ref ProjectName }
+
+  ParserFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-agenda-parser"
+      PackageType: Image
+      Code: { ImageUri: !Ref BackendImageUri }
+      ImageConfig:
+        Command: ["app.ai.agenda_lambda.handler"]
+      Architectures: [arm64]
+      Role: !GetAtt ParserRole.Arn
+      MemorySize: 512
+      Timeout: 30
+      LoggingConfig: { LogGroup: !Ref ParserLogs }
+      Environment:
+        Variables:
+          COGNITO_REGION: !Ref AWS::Region
+          COGNITO_USER_POOL_ID: !Ref CognitoUserPoolId
+          COGNITO_CLIENT_ID: !Ref CognitoClientId
+          PARSER_MODEL: !Ref ParserModel
+      Tags:
+        - { Key: PROJECT_NAME, Value: !Ref ProjectName }
+
+  ParserUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !GetAtt ParserFunction.Arn
+      AuthType: NONE
+      InvokeMode: BUFFERED
+      Cors:
+        AllowOrigins: [!Ref SiteOrigin]
+        AllowMethods: [POST]
+        AllowHeaders: [authorization, content-type]
+        MaxAge: 300
+
+  ParserUrlPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ParserFunction
+      Action: lambda:InvokeFunctionUrl
+      Principal: "*"
+      FunctionUrlAuthType: NONE
+
+  ParserInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ParserFunction
+      Action: lambda:InvokeFunction
+      Principal: "*"
+      InvokedViaFunctionUrl: true
+
+  MonthlyBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Sub "${ProjectName}-monthly-5-usd"
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit: { Amount: 5, Unit: USD }
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - { SubscriptionType: EMAIL, Address: !Ref BudgetEmail }
+
+Outputs:
+  ParserUrl:
+    Value: !GetAtt ParserUrl.FunctionUrl
+  ParserLogGroup:
+    Value: !Ref ParserLogs
+  BudgetName:
+    Value: !Sub "${ProjectName}-monthly-5-usd"

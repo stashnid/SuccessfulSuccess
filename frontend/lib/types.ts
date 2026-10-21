@@ -15,8 +15,27 @@ export type Meeting = {
   starts_at: string
   ends_at: string
   participants: Participant[]
+  agenda: ParsedAgenda | null
+  ai_suggestion: { agenda: ParsedAgenda; model: string | null; prompt_version: string | null } | null
   created_at: string
   updated_at: string
+}
+
+export type AgendaItem = { topic: string; owner: string | null; minutes: number | null }
+export type ActionItem = { task: string; owner: string | null; due: string | null }
+export type ParsedAgenda = {
+  title: string | null
+  starts_at: string | null
+  duration_minutes: number | null
+  items: AgendaItem[]
+  action_items: ActionItem[]
+  language: string
+}
+
+export type AgendaSuggestion = {
+  agenda: ParsedAgenda
+  model: string
+  prompt_version: string
 }
 
 export type MeetingList = {

@@ -1,7 +1,8 @@
 "use client"
 
-import { useRef } from "react"
+import { useRef, useState } from "react"
 import { CalendarDays, Clock, Mail, MapPin, Pencil, Trash2, Users } from "lucide-react"
+import { AgendaDialog } from "@/components/agenda-dialog"
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -36,8 +37,10 @@ export function MeetingDetailsDialog({
   onDelete: (meeting: Meeting) => void
 }) {
   const editRef = useRef<HTMLButtonElement>(null)
+  const [agendaOpen, setAgendaOpen] = useState(false)
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       {meeting ? (
         <DialogContent
@@ -81,6 +84,21 @@ export function MeetingDetailsDialog({
           ) : null}
 
           <Separator />
+
+          <section className="space-y-2 text-sm">
+            <h3 className="font-semibold">Agenda</h3>
+            {meeting.agenda?.items?.length ? (
+              <ol className="list-decimal space-y-1 pl-5">
+                {meeting.agenda.items.map((item, index) => (
+                  <li key={index}>{item.topic}{item.owner ? ` — ${item.owner}` : ""}</li>
+                ))}
+              </ol>
+            ) : <p className="text-muted-foreground">No agenda yet.</p>}
+            <Button variant="outline" onClick={() => {
+              onOpenChange(false)
+              setAgendaOpen(true)
+            }}>Add agenda</Button>
+          </section>
 
           <section className="space-y-3">
             <h3 className="flex items-center gap-2 text-sm font-semibold">
@@ -132,5 +150,7 @@ export function MeetingDetailsDialog({
         </DialogContent>
       ) : null}
     </Dialog>
+    {agendaOpen && meeting ? <AgendaDialog meeting={meeting} open onOpenChange={setAgendaOpen} /> : null}
+    </>
   )
 }

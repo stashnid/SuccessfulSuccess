@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     # runs in a VPC without internet access, so the deploy passes them in; when
     # empty they are fetched from Cognito on first use.
     cognito_jwks: str = ""
+    parser_model: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
     @field_validator("app_timezone")
     @classmethod

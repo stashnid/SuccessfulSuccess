@@ -11,8 +11,10 @@ from pydantic import (
     ValidationInfo,
     field_serializer,
     field_validator,
+    model_validator,
 )
 
+from app.ai.agenda import ParsedAgenda
 from app.config import settings
 
 MAX_PARTICIPANTS = 50
@@ -103,6 +105,8 @@ class MeetingRead(BaseModel):
     starts_at: datetime
     ends_at: datetime
     participants: list[ParticipantRead]
+    agenda: ParsedAgenda | None = None
+    ai_suggestion: dict | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -142,3 +146,18 @@ class UserRead(BaseModel):
 
 class UserSync(BaseModel):
     id_token: str = Field(min_length=1, description="The Cognito ID token from the same sign-in")
+
+
+class AgendaSave(BaseModel):
+    agenda: ParsedAgenda
+    ai_suggestion: ParsedAgenda | None = None
+    model: str | None = Field(default=None, max_length=120)
+    prompt_version: str | None = Field(default=None, max_length=80)
+
+    @model_validator(mode="after")
+    def _require_suggestion_provenance(self) -> "AgendaSave":
+        if self.ai_suggestion is not None and (not self.model or not self.prompt_version):
+            raise ValueError("AI suggestions need a model and prompt version.")
+        if self.ai_suggestion is None and (self.model or self.prompt_version):
+            raise ValueError("Model metadata needs an AI suggestion.")
+        return self

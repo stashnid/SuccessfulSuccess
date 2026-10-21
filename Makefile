@@ -18,7 +18,7 @@ ECS_SERVICE                ?= spry-service
 ECR_REGISTRY               ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
 IMAGE_URI                  ?= $(ECR_REGISTRY)/$(ECR_REPOSITORY):$(IMAGE_TAG)
 
-.PHONY: deploy-frontend deploy-backend connect-api configure-backend-auth report-now report-objects
+.PHONY: deploy-frontend deploy-backend connect-api configure-backend-auth report-now report-objects llm-hello parse
 
 # Lab 3 stretch: publish a same-origin /api/* route and configure the running
 # backend to verify Cognito access tokens. Neither target rebuilds the image.
@@ -62,3 +62,13 @@ report-now:
 
 report-objects:
 	aws s3 ls "s3://$(REPORTS_BUCKET)/reports/" --recursive --region "$(AWS_REGION)"
+
+# Lab 6: small, metered Bedrock calls from the local Python environment.
+PYTHON ?= python3
+export TEXT
+
+llm-hello:
+	cd backend && $(PYTHON) -m app.ai.cli hello
+
+parse:
+	cd backend && $(PYTHON) -m app.ai.cli parse

@@ -1,4 +1,5 @@
 import { clearSession, getAccessToken } from "@/lib/auth"
+import { toIsoDate } from "@/lib/datetime"
 import type {
   ApiErrorBody,
   ApiErrorDetail,
@@ -6,6 +7,8 @@ import type {
   MeetingCreateInput,
   MeetingList,
   UserProfile,
+  ParsedAgenda,
+  AgendaSuggestion,
 } from "@/lib/types"
 
 export const API_BASE_URL =
@@ -101,6 +104,44 @@ export function updateMeeting(id: string, payload: MeetingCreateInput) {
 
 export function deleteMeeting(id: string) {
   return request<void>(`/api/v1/meetings/${id}`, { method: "DELETE" })
+}
+
+export function saveAgenda(
+  id: string,
+  agenda: ParsedAgenda,
+  suggestion: AgendaSuggestion | null,
+) {
+  return request<Meeting>(`/api/v1/meetings/${id}/agenda`, {
+    method: "PUT",
+    body: JSON.stringify({
+      agenda,
+      ai_suggestion: suggestion?.agenda ?? null,
+      model: suggestion?.model ?? null,
+      prompt_version: suggestion?.prompt_version ?? null,
+    }),
+  })
+}
+
+export async function parseAgenda(text: string, signal: AbortSignal): Promise<AgendaSuggestion> {
+  const url = process.env.NEXT_PUBLIC_PARSER_URL
+  if (!url) throw new Error("Agenda parser is not configured.")
+  const token = await getAccessToken()
+  if (!token) throw new Error("Sign in to parse an agenda.")
+  const response = await fetch(url, {
+    method: "POST",
+    signal,
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      text,
+      today: toIsoDate(new Date()),
+      tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    }),
+  })
+  const body = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(body.error ?? (response.status === 429 ? "Parser is busy." : "Parsing failed."))
+  }
+  return body as AgendaSuggestion
 }
 
 export function getMe() {

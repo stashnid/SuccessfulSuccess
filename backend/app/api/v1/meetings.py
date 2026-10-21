@@ -7,6 +7,7 @@ from fastapi import APIRouter, Query, Response, status
 
 from app.api.deps import MeetingServiceDep
 from app.schemas import MeetingCreate, MeetingList, MeetingRead
+from app.schemas.meeting import AgendaSave
 
 router = APIRouter(prefix="/meetings", tags=["meetings"])
 
@@ -83,3 +84,15 @@ async def update_meeting(
 async def delete_meeting(meeting_id: uuid.UUID, service: MeetingServiceDep) -> Response:
     await service.delete(meeting_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.put(
+    "/{meeting_id}/agenda",
+    response_model=MeetingRead,
+    summary="Save a user-reviewed agenda and its optional AI suggestion",
+    responses={404: {"description": "Meeting not found"}},
+)
+async def save_agenda(
+    meeting_id: uuid.UUID, payload: AgendaSave, service: MeetingServiceDep
+) -> MeetingRead:
+    return MeetingRead.model_validate(await service.save_agenda(meeting_id, payload))
