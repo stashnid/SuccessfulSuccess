@@ -2,7 +2,7 @@
 
 Deployed app: https://d3j8i4re8dhmr8.cloudfront.net/today/
 
-The implementation is in the `codex/lab6-agenda` branch. Submit the final commit link after it is pushed. The new stack is `successfulsuccess-ai` in `us-east-1`; the parser is a Lambda Function URL that calls Claude Haiku 4.5 on Amazon Bedrock. The reviewed agenda is saved by the existing ECS meetings API to PostgreSQL. Aurora is **not** deployed in this account, so the architecture diagram and ADR show the actual database instead of claiming the lab's reference architecture is live.
+The implementation is in the `lab6-agenda` branch. Submit the [implementation commit](https://github.com/stashnid/SuccessfulSuccess/commit/c4a6d201252aab2f0bad0a78765f69f164e5f4fd). The new stack is `successfulsuccess-ai` in `us-east-1`; the parser is a Lambda Function URL that calls Claude Haiku 4.5 on Amazon Bedrock. The reviewed agenda is saved by the existing ECS meetings API to PostgreSQL. Aurora is **not** deployed in this account, so the architecture diagram and ADR show the actual database instead of claiming the lab's reference architecture is live.
 
 ## Required evidence
 
