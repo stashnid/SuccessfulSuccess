@@ -1,0 +1,232 @@
+{
+  "Id": "IamPolicyAutopilot",
+  "Statement": [
+    {
+      "Action": [
+        "aws-portal:ViewBilling"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Action": [
+        "budgets:ListTagsForResource",
+        "budgets:ViewBudget"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "arn:aws:budgets::312209831599:budget/successfulsuccess-monthly-5-usd",
+        "arn:aws:budgets::312209831599:budget/successfulsuccess-monthly-5-usd/action/*"
+      ]
+    },
+    {
+      "Action": [
+        "cloudwatch:DescribeAlarms"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "arn:aws:cloudwatch:us-east-1:312209831599:alarm:*"
+      ]
+    },
+    {
+      "Action": [
+        "cloudwatch:ListTagsForResource"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Action": [
+        "cognito-idp:DescribeIdentityProvider",
+        "cognito-idp:DescribeManagedLoginBranding",
+        "cognito-idp:DescribeManagedLoginBrandingByClient",
+        "cognito-idp:DescribeUserPool",
+        "cognito-idp:DescribeUserPoolClient",
+        "cognito-idp:GetUserPoolMfaConfig",
+        "cognito-idp:ListTagsForResource",
+        "cognito-idp:ListUserPoolClients"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "arn:aws:cognito-idp:us-east-1:312209831599:userpool/*"
+      ]
+    },
+    {
+      "Action": [
+        "cognito-idp:DescribeUserPoolDomain"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Action": [
+        "iam:GetRole",
+        "iam:GetRolePolicy",
+        "iam:ListAttachedRolePolicies",
+        "iam:ListInstanceProfileTags",
+        "iam:ListMFADeviceTags",
+        "iam:ListOpenIDConnectProviderTags",
+        "iam:ListPolicyTags",
+        "iam:ListRolePolicies",
+        "iam:ListRoleTags",
+        "iam:ListSAMLProviderTags",
+        "iam:ListServerCertificateTags",
+        "iam:ListUserTags"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "arn:aws:iam::312209831599:instance-profile/*",
+        "arn:aws:iam::312209831599:mfa/*",
+        "arn:aws:iam::312209831599:oidc-provider/*",
+        "arn:aws:iam::312209831599:policy/*",
+        "arn:aws:iam::312209831599:role/successfulsuccess-ai-ParserRole-dXWUBXfDo2iU",
+        "arn:aws:iam::312209831599:role/successfulsuccess-reports-BuilderRole-jgz2QwWuwW3S",
+        "arn:aws:iam::312209831599:role/successfulsuccess-reports-MailerRole-3maVLijQn9IW",
+        "arn:aws:iam::312209831599:role/successfulsuccess-reports-SchedulerRole-OHwpQwIA8tmb",
+        "arn:aws:iam::312209831599:saml-provider/*",
+        "arn:aws:iam::312209831599:server-certificate/*",
+        "arn:aws:iam::312209831599:user/*"
+      ]
+    },
+    {
+      "Action": [
+        "lambda:GetEventSourceMapping",
+        "lambda:GetFunction",
+        "lambda:GetFunctionCodeSigningConfig",
+        "lambda:GetFunctionConcurrency",
+        "lambda:GetFunctionUrlConfig",
+        "lambda:GetPolicy",
+        "lambda:ListVersionsByFunction"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "arn:aws:lambda:us-east-1:312209831599:event-source-mapping:*",
+        "arn:aws:lambda:us-east-1:312209831599:function:successfulsuccess-agenda-parser",
+        "arn:aws:lambda:us-east-1:312209831599:function:successfulsuccess-report-builder",
+        "arn:aws:lambda:us-east-1:312209831599:function:successfulsuccess-report-mailer"
+      ]
+    },
+    {
+      "Action": [
+        "lambda:ListTags"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Action": [
+        "logs:DescribeLogGroups",
+        "logs:ListTagsForResource"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Action": [
+        "oam:ListTagsForResource"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Action": [
+        "s3:GetAccelerateConfiguration",
+        "s3:GetBucketAcl",
+        "s3:GetBucketCORS",
+        "s3:GetBucketLogging",
+        "s3:GetBucketNotification",
+        "s3:GetBucketObjectLockConfiguration",
+        "s3:GetBucketPolicy",
+        "s3:GetBucketPublicAccessBlock",
+        "s3:GetBucketRequestPayment",
+        "s3:GetBucketTagging",
+        "s3:GetBucketVersioning",
+        "s3:GetBucketWebsite",
+        "s3:GetEncryptionConfiguration",
+        "s3:GetLifecycleConfiguration",
+        "s3:GetReplicationConfiguration",
+        "s3:ListBucket"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "arn:aws:s3:::successfulsuccess-reports-312209831599",
+        "arn:aws:s3:us-east-1:312209831599:accesspoint/*"
+      ]
+    },
+    {
+      "Action": [
+        "s3:GetObjectTagging",
+        "s3:GetObjectVersionTagging"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "arn:aws:s3:::successfulsuccess-reports-312209831599/*",
+        "arn:aws:s3:us-east-1:312209831599:accesspoint/*/object/*"
+      ]
+    },
+    {
+      "Action": [
+        "s3-object-lambda:GetObjectTagging"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "arn:aws:s3:::*/*",
+        "arn:aws:s3:us-east-1:312209831599:accesspoint/*/object/*"
+      ]
+    },
+    {
+      "Action": [
+        "s3express:GetLifecycleConfiguration"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "arn:aws:s3:::*"
+      ]
+    },
+    {
+      "Action": [
+        "scheduler:GetSchedule"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "arn:aws:scheduler:us-east-1:312209831599:schedule/default/*"
+      ]
+    },
+    {
+      "Action": [
+        "sns:GetSubscriptionAttributes",
+        "sns:GetTopicAttributes",
+        "sns:ListSubscriptionsByTopic",
+        "sns:ListTagsForResource"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "arn:aws:sns:us-east-1:312209831599:successfulsuccess-report-dlq-alerts"
+      ]
+    },
+    {
+      "Action": [
+        "sqs:GetQueueAttributes",
+        "sqs:ListQueueTags"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "arn:aws:sqs:us-east-1:312209831599:successfulsuccess-report-requests",
+        "arn:aws:sqs:us-east-1:312209831599:successfulsuccess-report-requests-dlq"
+      ]
+    }
+  ],
+  "Version": "2012-10-17"
+}

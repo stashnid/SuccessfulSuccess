@@ -42,7 +42,7 @@ The backend applies migrations on startup by default. Sign-in requires internet 
 
 - [frontend/](frontend/) — Next.js interface, authentication flow, and UI components.
 - [backend/](backend/) — FastAPI routes, services, database models, migrations, and tests.
-- [infra/](infra/) — infrastructure templates and supporting scripts.
+- [infra/](infra/) — Terraform configuration for Cognito, weekly reports and agenda parsing; other AWS infrastructure remains in CloudFormation.
 - [scripts/](scripts/) — deployment and configuration helpers.
 - [SPEC.md](SPEC.md) — application specification.
 - [docker-compose.yml](docker-compose.yml) — local frontend, backend, and PostgreSQL stack.
@@ -55,6 +55,14 @@ The backend applies migrations on startup by default. Sign-in requires internet 
 - [Lab 3 plan](LAB3_PLAN.md) — coursework checklist.
 
 The current [Makefile](Makefile) provides `deploy-frontend`, `deploy-backend`, `connect-api`, and `configure-backend-auth`. These target an existing AWS environment and require its credentials and configuration; they are not needed to start Docker Compose locally. See the setup notes for infrastructure limitations and remaining checks.
+
+### Lab 7 infrastructure migration
+
+The three course stacks for authentication, weekly reports and agenda parsing are described in [infra/](infra/) as one Terraform root module. The target HCP Terraform organization is `successfulsuccess-stashnid`, with workspace `successfulsuccess-dev` and working directory `infra/`. Its state is remote and its AWS access uses short-lived OIDC credentials. The Google OAuth client secret belongs in a **sensitive workspace variable** named `google_client_secret`; do not put it in Git or `terraform.tfvars`.
+
+Run `make infra-fmt`, `make infra-validate` and `make infra-plan` to review configuration. The Makefile has no infrastructure apply target. Application deployment is separate: the manual GitHub Actions workflow deploys the ECS backend and CloudFront site after the infrastructure is ready. Its public Cognito and parser values are repository variables; local deployment scripts can also read them from Terraform outputs.
+
+Existing resources must be retained by CloudFormation, imported into the HCP state, and verified by a no-change plan before removing the old stack templates. The migration status and safety gates are recorded in [Lab 7 inventory](docs/lab7-migration-inventory.md); the architecture decision is in [ADR 0007](docs/adr/0007-terraform.md).
 
 ## Validation
 

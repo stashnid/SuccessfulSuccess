@@ -2,12 +2,12 @@
 set -euo pipefail
 
 # Update the existing ECS task without printing its DATABASE_URL. Cognito
-# identifiers come from the deployed auth stack, not from local secrets.
+# identifiers come from environment variables or Terraform outputs, not secrets.
+root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 region="${AWS_REGION:-us-east-1}"
 account="${AWS_ACCOUNT_ID:-312209831599}"
 cluster="${ECS_CLUSTER:-spry-cluster}"
 service="${ECS_SERVICE:-spry-service}"
-auth_stack="${AUTH_STACK:-successfulsuccess-auth}"
 website_origin="${WEBSITE_ORIGIN:-https://d3j8i4re8dhmr8.cloudfront.net}"
 
 if [[ "$(aws sts get-caller-identity --query Account --output text)" != "$account" ]]; then
@@ -15,15 +15,16 @@ if [[ "$(aws sts get-caller-identity --query Account --output text)" != "$accoun
   exit 1
 fi
 
-stack_output() {
-  aws cloudformation describe-stacks --stack-name "$auth_stack" --region "$region" \
-    --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue|[0]" --output text
+infra_output() {
+  terraform -chdir="$root_dir/infra" output -raw "$1"
 }
 
-pool_id="$(stack_output UserPoolId)"
-client_id="$(stack_output UserPoolClientId)"
+pool_id="${COGNITO_USER_POOL_ID:-}"
+client_id="${COGNITO_CLIENT_ID:-}"
+[[ -n "$pool_id" ]] || pool_id="$(infra_output user_pool_id)"
+[[ -n "$client_id" ]] || client_id="$(infra_output user_pool_client_id)"
 if [[ -z "$pool_id" || -z "$client_id" || "$pool_id" == None || "$client_id" == None ]]; then
-  echo "Cognito outputs are missing from $auth_stack" >&2
+  echo "Cognito outputs are missing from the environment or Terraform state" >&2
   exit 1
 fi
 

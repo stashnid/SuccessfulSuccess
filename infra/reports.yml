@@ -102,6 +102,8 @@ Resources:
 
   ReportsBucketPolicy:
     Type: AWS::S3::BucketPolicy
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Metadata:
       com.aws.cloudformation.Context:
         why: Reject plaintext transport to the private reports bucket.
@@ -123,6 +125,8 @@ Resources:
 
   DeadLetterQueue:
     Type: AWS::SQS::Queue
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Metadata:
       com.aws.cloudformation.Context:
         why: Retains failed report commands for inspection and redrive.
@@ -136,6 +140,8 @@ Resources:
 
   ReportQueue:
     Type: AWS::SQS::Queue
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Metadata:
       com.aws.cloudformation.Context:
         why: Buffers schedule and manual commands; failures retry then go to DLQ.
@@ -152,6 +158,8 @@ Resources:
 
   BuilderRole:
     Type: AWS::IAM::Role
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Metadata:
       com.aws.cloudformation.Context:
         why: Grants the builder queue reads, its database secret and report uploads.
@@ -184,6 +192,8 @@ Resources:
 
   BuilderLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Metadata:
       com.aws.cloudformation.Context:
         why: Preserves report-builder trigger and storage evidence.
@@ -196,6 +206,8 @@ Resources:
 
   BuilderFunction:
     Type: AWS::Lambda::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Metadata:
       com.aws.cloudformation.Context:
         why: Reuses backend image and reads the existing PostgreSQL pooler without VPC cost.
@@ -223,6 +235,8 @@ Resources:
 
   QueueEventSource:
     Type: AWS::Lambda::EventSourceMapping
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Metadata:
       com.aws.cloudformation.Context:
         why: Lambda service polls SQS outside the VPC and invokes the builder.
@@ -235,6 +249,8 @@ Resources:
 
   SchedulerRole:
     Type: AWS::IAM::Role
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Metadata:
       com.aws.cloudformation.Context:
         why: Allows the weekly schedule to enqueue or directly invoke during validation.
@@ -264,6 +280,8 @@ Resources:
 
   WeeklySchedule:
     Type: AWS::Scheduler::Schedule
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Metadata:
       com.aws.cloudformation.Context:
         why: Sends previous-week command at Kyiv wall-clock time, including DST.
@@ -281,6 +299,8 @@ Resources:
 
   MailerRole:
     Type: AWS::IAM::Role
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Metadata:
       com.aws.cloudformation.Context:
         why: Grants the mailer report reads and SES sending from one identity.
@@ -313,6 +333,8 @@ Resources:
 
   MailerLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Metadata:
       com.aws.cloudformation.Context:
         why: Captures S3-triggered send evidence and failures.
@@ -325,6 +347,8 @@ Resources:
 
   MailerFunction:
     Type: AWS::Lambda::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Metadata:
       com.aws.cloudformation.Context:
         why: Outside VPC for SES reachability; never writes into reports/.
@@ -349,6 +373,8 @@ Resources:
 
   MailerInvokePermission:
     Type: AWS::Lambda::Permission
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Metadata:
       com.aws.cloudformation.Context:
         why: Lets only this account's reports bucket invoke the mailer.
@@ -362,6 +388,8 @@ Resources:
 
   SenderDomainIdentity:
     Type: AWS::SES::EmailIdentity
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Condition: HasSenderDomain
     Metadata:
       com.aws.cloudformation.Context:
@@ -374,6 +402,8 @@ Resources:
 
   DeadLetterAlertTopic:
     Type: AWS::SNS::Topic
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Metadata:
       com.aws.cloudformation.Context:
         why: Notifies the report operator when a request exhausts queue retries.
@@ -385,6 +415,8 @@ Resources:
 
   DeadLetterAlertTopicPolicy:
     Type: AWS::SNS::TopicPolicy
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Metadata:
       com.aws.cloudformation.Context:
         why: Allows only this account's named CloudWatch alarm to publish alerts.
@@ -420,6 +452,8 @@ Resources:
 
   DeadLetterAlertSubscription:
     Type: AWS::SNS::Subscription
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Metadata:
       com.aws.cloudformation.Context:
         why: Sends alarm emails to the same operator who receives reports.
@@ -431,6 +465,8 @@ Resources:
 
   DeadLetterAlarm:
     Type: AWS::CloudWatch::Alarm
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     DependsOn: DeadLetterAlertTopicPolicy
     Metadata:
       com.aws.cloudformation.Context:

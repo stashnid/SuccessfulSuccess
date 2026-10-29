@@ -90,6 +90,8 @@ Resources:
   # https://<prefix>.auth.<region>.amazoncognito.com
   UserPoolDomain:
     Type: AWS::Cognito::UserPoolDomain
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       UserPoolId: !Ref UserPool
       # Domain prefixes are unique per region across all accounts.
@@ -99,6 +101,8 @@ Resources:
 
   GoogleIdentityProvider:
     Type: AWS::Cognito::UserPoolIdentityProvider
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Condition: HasGoogle
     Properties:
       UserPoolId: !Ref UserPool
@@ -117,6 +121,8 @@ Resources:
   # managed login and authorization code + PKCE. Keep the logical ID stable.
   UserPoolClient:
     Type: AWS::Cognito::UserPoolClient
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       ClientName: !Sub "${ProjectName}-web"
       UserPoolId: !Ref UserPool
@@ -148,6 +154,8 @@ Resources:
   # Without it, the version-2 login page is unavailable for this client.
   ManagedLoginBranding:
     Type: AWS::Cognito::ManagedLoginBranding
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     DependsOn: UserPoolDomain
     Properties:
       UserPoolId: !Ref UserPool

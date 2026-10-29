@@ -15,3 +15,13 @@ next-env.d.ts
 .env*.local
 .idea/
 .DS_Store
+
+# Terraform local state, provider cache, and plans (commit .terraform.lock.hcl)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+crash.log
+*.auto.tfvars
+*.secret.tfvars

@@ -19,6 +19,10 @@ env:
   IMAGE_TAG: latest
   ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
   ECS_SERVICE: ${{ vars.ECS_SERVICE }}
+  COGNITO_USER_POOL_ID: ${{ vars.COGNITO_USER_POOL_ID }}
+  COGNITO_CLIENT_ID: ${{ vars.COGNITO_CLIENT_ID }}
+  COGNITO_DOMAIN: ${{ vars.COGNITO_DOMAIN }}
+  PARSER_URL: ${{ vars.PARSER_URL }}
 
 jobs:
   deploy:
@@ -28,7 +32,7 @@ jobs:
     steps:
       - name: Check deployment configuration
         run: |
-          for name in AWS_REGION AWS_ACCOUNT_ID AWS_ROLE_ARN S3_BUCKET CLOUDFRONT_DISTRIBUTION_ID ECR_REPOSITORY ECS_CLUSTER ECS_SERVICE; do
+          for name in AWS_REGION AWS_ACCOUNT_ID AWS_ROLE_ARN S3_BUCKET CLOUDFRONT_DISTRIBUTION_ID ECR_REPOSITORY ECS_CLUSTER ECS_SERVICE COGNITO_USER_POOL_ID COGNITO_CLIENT_ID COGNITO_DOMAIN PARSER_URL; do
             if [[ -z "${!name}" ]]; then
               echo "::error::Set the repository variable $name before running this workflow."
               exit 1
