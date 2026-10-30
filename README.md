@@ -58,11 +58,11 @@ The current [Makefile](Makefile) provides `deploy-frontend`, `deploy-backend`, `
 
 ### Lab 7 infrastructure migration
 
-The three course stacks for authentication, weekly reports and agenda parsing are described in [infra/](infra/) as one Terraform root module. The target HCP Terraform organization is `successfulsuccess-stashnid`, with workspace `successfulsuccess-dev` and working directory `infra/`. Its state is remote and its AWS access uses short-lived OIDC credentials. The Google OAuth client secret belongs in a **sensitive workspace variable** named `google_client_secret`; do not put it in Git or `terraform.tfvars`.
+The existing authentication, weekly report and agenda parser resources are now managed as one Terraform root module in [infra/](infra/). They were imported into the HCP Terraform organization `successfulsuccess-stashnid`, workspace `successfulsuccess-dev`, working directory `infra/`, on 2026-10-30. The three former CloudFormation stacks were deleted with retention policies; their physical resources remain. HCP stores the state remotely and uses short-lived OIDC credentials for AWS access. The Google OAuth client secret belongs in a **sensitive workspace variable** named `google_client_secret`; do not put it in Git or `terraform.tfvars`.
 
-Run `make infra-fmt`, `make infra-validate` and `make infra-plan` to review configuration. The Makefile has no infrastructure apply target. Application deployment is separate: the manual GitHub Actions workflow deploys the ECS backend and CloudFront site after the infrastructure is ready. Its public Cognito and parser values are repository variables; local deployment scripts can also read them from Terraform outputs.
+Run `make infra-fmt`, `make infra-validate` and `make infra-plan` to review configuration. The Makefile has no infrastructure apply target. A GitHub push to the connected branch starts an HCP run, whose plan must be reviewed before an apply. The current AWS run role is read-only: imports and plans work, but a future resource change requires a separately reviewed, scoped role update. Application deployment is separate: the manual GitHub Actions workflow deploys the ECS backend and CloudFront site after the infrastructure is ready. Its public Cognito and parser values are repository variables; local deployment scripts can also read them from Terraform outputs.
 
-Existing resources must be retained by CloudFormation, imported into the HCP state, and verified by a no-change plan before removing the old stack templates. The migration status and safety gates are recorded in [Lab 7 inventory](docs/lab7-migration-inventory.md); the architecture decision is in [ADR 0007](docs/adr/0007-terraform.md).
+The [Lab 7 migration record](docs/lab7-migration-inventory.md) lists the retained resources, import results and verification evidence. The architecture decision is in [ADR 0007](docs/adr/0007-terraform.md).
 
 ## Validation
 

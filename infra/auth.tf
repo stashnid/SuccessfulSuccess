@@ -1,5 +1,5 @@
-# Existing Cognito resources from auth.yml. Import their physical IDs before
-# planning an apply. The original user pool and client must never be replaced.
+# Existing Cognito resources adopted into HCP Terraform state on 2026-10-30.
+# The original user pool and client must never be replaced.
 resource "aws_cognito_user_pool" "main" {
   name                     = "${var.project_name}-users"
   user_pool_tier           = "ESSENTIALS"

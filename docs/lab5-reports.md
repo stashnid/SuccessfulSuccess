@@ -42,7 +42,7 @@ account remains in the SES sandbox. No custom domain is required for this lab.
 - A private S3 artifact bucket containing the mailer zip at an immutable key.
 - A verified SES sender and recipient in `us-east-1`.
 
-`infra/reports.yml` creates the report bucket, queue and DLQ, Lambda functions,
+`infra/reports.tf` now manages the existing report bucket, queue and DLQ, Lambda functions,
 schedule, S3 notification, IAM roles, seven-day log retention, and a DLQ alarm.
 The alarm publishes to a dedicated SNS topic. Its email subscription must be
 confirmed once by the operator before failure alerts can reach the inbox.
