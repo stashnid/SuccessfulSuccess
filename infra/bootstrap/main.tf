@@ -48,6 +48,22 @@ resource "aws_iam_role_policy" "hcp_import" {
   policy = file("${path.module}/import-policy.json")
 }
 
+# Scoped permission for the Lab 7 drift exercise. HCP can restore only tags
+# on the agenda parser; it cannot change code, configuration or other Lambdas.
+resource "aws_iam_role_policy" "hcp_parser_tags" {
+  name = "successfulsuccess-hcp-parser-tags-only"
+  role = aws_iam_role.hcp_infra.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid      = "Lab7ParserTagsOnly"
+      Effect   = "Allow"
+      Action   = ["lambda:TagResource", "lambda:UntagResource"]
+      Resource = "arn:aws:lambda:us-east-1:312209831599:function:successfulsuccess-agenda-parser"
+    }]
+  })
+}
+
 output "hcp_run_role_arn" {
   value = aws_iam_role.hcp_infra.arn
 }

@@ -67,7 +67,10 @@ resource "aws_lambda_function" "parser" {
     }
   }
 
-  tags = { PROJECT_NAME = var.project_name }
+  tags = {
+    PROJECT_NAME  = var.project_name
+    LAB7_WORKFLOW = "reviewed"
+  }
   lifecycle { prevent_destroy = true }
 }
 
