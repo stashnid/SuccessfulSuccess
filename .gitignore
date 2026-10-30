@@ -20,6 +20,7 @@ next-env.d.ts
 .terraform/
 *.tfstate
 *.tfstate.*
+.lab7-backup/
 *.tfplan
 tfplan
 crash.log
