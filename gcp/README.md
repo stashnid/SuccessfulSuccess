@@ -18,7 +18,7 @@ terraform -chdir=gcp/bootstrap apply
 terraform -chdir=gcp/bootstrap output -json hcp_environment
 ```
 
-4. Set the four output values as environment variables in the GCP HCP workspace. Add Terraform variables `project_id`, `cognito_user_pool_id`, `cognito_client_id`, and `cognito_domain`. The Cognito app client must permit `https://PROJECT_ID.web.app/auth/callback/` and logout to `https://PROJECT_ID.web.app/`. Preserve the existing AWS site URLs if using the same client. The frontend and API must use the same client ID. Google OAuth still returns to Cognito as before.
+4. Set the four output values as environment variables in the GCP HCP workspace. Add Terraform variables `project_id`, `cognito_user_pool_id`, `cognito_client_id`, and `cognito_domain`. The Cognito app client must permit `https://PROJECT_ID.web.app/auth/callback/` and logout to `https://PROJECT_ID.web.app/`. Preserve the existing AWS site URLs if using the same client. The frontend and API must use the same client ID. Google OAuth still returns to Cognito as before. If you create a new app client through the SDK or CLI for a managed login domain, attach a default managed login style to that client so the sign-in page is available.
 
 The Workload Identity provider admits only tokens from this HCP organization and workspace by their IDs. The API identity can connect to Cloud SQL and read the one database secret. Terraform generates the PostgreSQL password and stores the connection string in Secret Manager. The restricted GCP HCP state also contains the generated value, so keep state and plans private.
 

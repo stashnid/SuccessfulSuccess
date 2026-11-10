@@ -34,8 +34,13 @@ function SessionProvider({ children }: { children: React.ReactNode }) {
   const { events, removeUser } = auth
 
   useEffect(() => {
-    if (syncedSub.current === (sub ?? null)) return
-    queryClient.clear()
+    const previousSub = syncedSub.current
+    if (previousSub === (sub ?? null)) return
+    if (previousSub) {
+      // The new session may already be loading its own meetings.
+      queryClient.removeQueries({ queryKey: ["meetings", previousSub] })
+      queryClient.getMutationCache().clear()
+    }
     syncedSub.current = sub ?? null
     if (sub && idToken) {
       void syncMe(idToken).catch((error) => console.warn("Profile sync failed", error))
