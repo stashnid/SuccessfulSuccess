@@ -1,0 +1,7 @@
+.terraform/
+.git/
+bootstrap/
+*.tfstate*
+*.tfplan
+*.auto.tfvars
+*.secret.tfvars

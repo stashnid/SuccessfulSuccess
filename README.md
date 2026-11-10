@@ -62,6 +62,10 @@ The existing authentication, weekly report and agenda parser resources are now m
 
 Run `make infra-fmt`, `make infra-validate` and `make infra-plan` to review configuration. The Makefile has no infrastructure apply target. A GitHub push to the connected branch starts an HCP run, whose plan must be reviewed before an apply. The AWS run role can read the imported infrastructure and change tags only on the `successfulsuccess-agenda-parser` Lambda; any other resource change needs a separately reviewed, scoped role update. Application deployment is separate: the manual GitHub Actions workflow deploys the ECS backend and CloudFront site after the infrastructure is ready. Its public Cognito and parser values are repository variables; local deployment scripts can also read them from Terraform outputs.
 
+## Lab 9 on Google Cloud
+
+[Deploy the Google Cloud copy and stop its database after grading](gcp/README.md). Firebase Hosting, Cloud Run and Cloud SQL run the core. Cognito sign-in, the weekly report and the agenda parser stay on AWS. The GCP copy has a separate database and Terraform state. See the [service decisions](docs/adr/0009-google-cloud-core.md) and [cost comparison](docs/lab9-costs.md).
+
 The [Lab 7 migration record](docs/lab7-migration-inventory.md) lists the retained resources, import results and verification evidence. The architecture decision is in [ADR 0007](docs/adr/0007-terraform.md).
 
 ## Validation
